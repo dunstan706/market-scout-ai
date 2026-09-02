@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { WaitlistForm } from "@/components/WaitlistForm";
+import { BriefCard, type Signal } from "@/components/BriefCard";
+import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -13,7 +15,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Localscope — Weekly market briefs for salons & spas" },
       {
         property: "og:description",
-        content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners in India.",
+        content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -22,21 +24,21 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const SIGNALS = [
+const SIGNALS: Signal[] = [
   {
-    tone: "red" as const,
+    tone: "red",
     label: "Price move",
     headline: "Glow Studio dropped haircut prices by 15%",
-    detail: "₹600 → ₹510 for women's cuts, listed on Google and Instagram since Tuesday.",
+    detail: "$60 → $51 for women's cuts, listed on Google and Instagram since Tuesday.",
   },
   {
-    tone: "amber" as const,
+    tone: "amber",
     label: "New entrant",
-    headline: "New salon opening 700 m away on 12th Main",
+    headline: "New salon opening 700 m away on Main Street",
     detail: "Shop board went up this week; hiring posts for 3 stylists on Instagram.",
   },
   {
-    tone: "green" as const,
+    tone: "green",
     label: "Your reviews",
     headline: "Customers increasingly praise your fast service",
     detail: "“Quick” and “no waiting” mentioned in 9 of your last 14 reviews (up from 3).",
@@ -45,7 +47,7 @@ const SIGNALS = [
 
 const MONITORS = [
   ["Competitor prices & services", "Menu changes, new treatments, package deals"],
-  ["Promotions & offers", "Festival discounts, first-visit deals, combo pricing"],
+  ["Promotions & offers", "Seasonal discounts, first-visit deals, combo pricing"],
   ["Reviews & sentiment", "What customers praise or complain about — yours and theirs"],
   ["New openings & closures", "Salons arriving, expanding, or shutting nearby"],
   ["Social & web activity", "Instagram posts, website updates, hiring signals"],
@@ -61,30 +63,30 @@ const STEPS = [
 const PLANS = [
   {
     name: "Watch",
-    price: "₹1,000",
+    price: "$15",
+    period: "/mo",
     blurb: "Weekly brief for one location, up to 5 competitors.",
     items: ["Weekly Market Brief", "Prices, promotions & hours", "Review sentiment summary"],
+    cta: "Join waitlist",
   },
   {
     name: "Advise",
-    price: "₹3,500",
+    price: "$50",
+    period: "/mo",
     blurb: "Deeper intelligence plus recommendations you can act on.",
     items: ["Everything in Watch", "Up to 15 competitors", "New openings & closures", "Actionable recommendations", "Instant alerts on big moves"],
     featured: true,
+    cta: "Join waitlist",
   },
   {
     name: "Expand",
-    price: "₹7,500+",
+    price: "Ask for a quote",
+    period: "",
     blurb: "Multi-location owners and those planning the next branch.",
     items: ["Everything in Advise", "Multiple locations", "Neighbourhood development tracking", "Next-location recommendations"],
+    cta: "Ask for a quote",
   },
 ];
-
-const toneClasses = {
-  red: { dot: "bg-signal-red", chip: "bg-signal-red-soft text-signal-red" },
-  amber: { dot: "bg-signal-amber", chip: "bg-signal-amber-soft text-signal-amber" },
-  green: { dot: "bg-signal-green", chip: "bg-signal-green-soft text-signal-green" },
-};
 
 function Index() {
   return (
@@ -98,6 +100,7 @@ function Index() {
           <a href="#brief" className="hover:text-foreground">Sample brief</a>
           <a href="#how" className="hover:text-foreground">How it works</a>
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
+          <a href="#try" className="hover:text-foreground">Try it</a>
         </nav>
         <a
           href="#waitlist"
@@ -110,7 +113,7 @@ function Index() {
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-6 pb-20 pt-10 md:pt-20">
         <div className="rule-double pt-6">
-          <p className="eyebrow animate-fade">For salon & spa owners · Launching first in India</p>
+          <p className="eyebrow animate-fade">For salon & spa owners · Anywhere in the world</p>
           <h1 className="mt-6 max-w-4xl text-5xl leading-[1.02] md:text-7xl animate-rise">
             We watch your local market. <em className="text-accent">You</em> just read the brief.
           </h1>
@@ -148,46 +151,13 @@ function Index() {
             </ul>
           </div>
 
-          <article className="paper-card rounded-md p-7 md:p-10 shadow-lift">
-            <div className="flex items-baseline justify-between border-b border-ink pb-4">
-              <div>
-                <p className="eyebrow">Weekly Market Brief</p>
-                <h3 className="mt-1 font-serif text-3xl">Radiance Salon, Indiranagar</h3>
-              </div>
-              <p className="text-xs text-muted-foreground">Week of 31 Aug</p>
-            </div>
-
-            <ol className="divide-y divide-rule">
-              {SIGNALS.map((s, i) => {
-                const t = toneClasses[s.tone];
-                return (
-                  <li key={s.headline} className="flex gap-5 py-6">
-                    <span className="font-serif text-3xl text-muted-foreground/60">{String(i + 1).padStart(2, "0")}</span>
-                    <div>
-                      <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${t.chip}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
-                        {s.label}
-                      </span>
-                      <p className="mt-2 font-serif text-xl leading-snug">{s.headline}</p>
-                      <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{s.detail}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-
-            <div className="rule-top mt-2 pt-6">
-              <p className="eyebrow text-accent">Recommendation</p>
-              <p className="mt-2 font-serif text-2xl leading-snug">
-                Test a weekday promotion to blunt Glow Studio's price cut — and put “in and out in 40 minutes” at the
-                front of your Instagram bio and Google profile.
-              </p>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Why: your weekday afternoons are the slot most exposed to a cheaper competitor, and speed is the strength
-                customers already notice.
-              </p>
-            </div>
-          </article>
+          <BriefCard
+            title="Radiance Salon, Riverside"
+            dateLabel="Week of 31 Aug"
+            signals={SIGNALS}
+            recommendation="Test a weekday promotion to blunt Glow Studio's price cut — and put “in and out in 40 minutes” at the front of your Instagram bio and Google profile."
+            why="your weekday afternoons are the slot most exposed to a cheaper competitor, and speed is the strength customers already notice."
+          />
         </div>
       </section>
 
@@ -242,9 +212,9 @@ function Index() {
                 <h3 className="font-serif text-2xl">{p.name}</h3>
                 {p.featured && <span className="eyebrow text-accent">Most popular</span>}
               </div>
-              <p className="mt-4 font-serif text-5xl">
+              <p className={`mt-4 font-serif ${p.period ? "text-5xl" : "text-3xl leading-[1.35]"}`}>
                 {p.price}
-                <span className="ml-1 font-sans text-sm text-muted-foreground">/mo</span>
+                {p.period && <span className="ml-1 font-sans text-sm text-muted-foreground">{p.period}</span>}
               </p>
               <p className="mt-3 text-sm text-muted-foreground">{p.blurb}</p>
               <ul className="mt-6 space-y-2 border-t border-rule pt-5 text-sm">
@@ -257,16 +227,27 @@ function Index() {
               </ul>
               <a
                 href="#waitlist"
-                className={`mt-8 inline-block rounded-sm px-4 py-2.5 text-center text-sm font-medium transition-colors ${
-                  p.featured
-                    ? "bg-primary text-primary-foreground hover:bg-accent"
-                    : "border border-ink hover:bg-primary hover:text-primary-foreground"
-                }`}
+                className={`mt-auto pt-8 inline-block text-center text-sm font-medium`}
               >
-                Join waitlist
+                <span
+                  className={`inline-block w-full rounded-sm px-4 py-2.5 transition-colors ${
+                    p.featured
+                      ? "bg-primary text-primary-foreground hover:bg-accent"
+                      : "border border-ink hover:bg-primary hover:text-primary-foreground"
+                  }`}
+                >
+                  {p.cta}
+                </span>
               </a>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Generate sample brief */}
+      <section id="try" className="bg-paper-deep/70 border-y border-rule">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <SampleBriefGenerator />
         </div>
       </section>
 
@@ -278,7 +259,7 @@ function Index() {
             <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Get your first brief free.</h2>
             <p className="mt-5 text-muted-foreground leading-relaxed">
               We're onboarding salons and spas city by city. Join the list and we'll send a sample brief for your own
-              neighbourhood before you pay a rupee.
+              neighbourhood before you pay a cent.
             </p>
           </div>
           <div className="paper-card rounded-md p-7">
