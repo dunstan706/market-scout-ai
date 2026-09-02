@@ -58,13 +58,13 @@ export function WaitlistForm({ compact = false }: { compact?: boolean }) {
           name="email"
           required
           autoComplete="email"
-          placeholder="you@yoursalon.in"
+          placeholder="you@yoursalon.com"
           aria-label="Email address"
         />
         {!compact && (
           <>
             <input className={input} name="businessName" placeholder="Salon / spa name" aria-label="Business name" />
-            <input className={input} name="city" placeholder="City (e.g. Bengaluru)" aria-label="City" />
+            <input className={input} name="city" placeholder="City (e.g. London)" aria-label="City" />
             <select className={input} name="businessType" defaultValue="salon" aria-label="Business type">
               <option value="salon">Salon</option>
               <option value="spa">Spa</option>
