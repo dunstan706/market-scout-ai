@@ -1,24 +1,296 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { WaitlistForm } from "@/components/WaitlistForm";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Localscope — Weekly market briefs for salons & spas" },
+      {
+        name: "description",
+        content:
+          "AI that watches your local salon market — competitor prices, reviews, new openings — and tells you what changed, why it matters, and what to do.",
+      },
+      { property: "og:title", content: "Localscope — Weekly market briefs for salons & spas" },
+      {
+        property: "og:description",
+        content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners in India.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+const SIGNALS = [
+  {
+    tone: "red" as const,
+    label: "Price move",
+    headline: "Glow Studio dropped haircut prices by 15%",
+    detail: "₹600 → ₹510 for women's cuts, listed on Google and Instagram since Tuesday.",
+  },
+  {
+    tone: "amber" as const,
+    label: "New entrant",
+    headline: "New salon opening 700 m away on 12th Main",
+    detail: "Shop board went up this week; hiring posts for 3 stylists on Instagram.",
+  },
+  {
+    tone: "green" as const,
+    label: "Your reviews",
+    headline: "Customers increasingly praise your fast service",
+    detail: "“Quick” and “no waiting” mentioned in 9 of your last 14 reviews (up from 3).",
+  },
+];
+
+const MONITORS = [
+  ["Competitor prices & services", "Menu changes, new treatments, package deals"],
+  ["Promotions & offers", "Festival discounts, first-visit deals, combo pricing"],
+  ["Reviews & sentiment", "What customers praise or complain about — yours and theirs"],
+  ["New openings & closures", "Salons arriving, expanding, or shutting nearby"],
+  ["Social & web activity", "Instagram posts, website updates, hiring signals"],
+  ["Neighbourhood changes", "New apartments, offices, and footfall drivers"],
+];
+
+const STEPS = [
+  ["Tell us where you are", "Your salon's location and the 3–10 competitors you care about. Or let us find them."],
+  ["We watch, every day", "AI scans public listings, reviews, websites and social pages so you don't have to."],
+  ["You get a brief, every Monday", "Three signals, one recommendation. Read it in two minutes on WhatsApp or email."],
+];
+
+const PLANS = [
+  {
+    name: "Watch",
+    price: "₹1,000",
+    blurb: "Weekly brief for one location, up to 5 competitors.",
+    items: ["Weekly Market Brief", "Prices, promotions & hours", "Review sentiment summary"],
+  },
+  {
+    name: "Advise",
+    price: "₹3,500",
+    blurb: "Deeper intelligence plus recommendations you can act on.",
+    items: ["Everything in Watch", "Up to 15 competitors", "New openings & closures", "Actionable recommendations", "Instant alerts on big moves"],
+    featured: true,
+  },
+  {
+    name: "Expand",
+    price: "₹7,500+",
+    blurb: "Multi-location owners and those planning the next branch.",
+    items: ["Everything in Advise", "Multiple locations", "Neighbourhood development tracking", "Next-location recommendations"],
+  },
+];
+
+const toneClasses = {
+  red: { dot: "bg-signal-red", chip: "bg-signal-red-soft text-signal-red" },
+  amber: { dot: "bg-signal-amber", chip: "bg-signal-amber-soft text-signal-amber" },
+  green: { dot: "bg-signal-green", chip: "bg-signal-green-soft text-signal-green" },
+};
+
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="min-h-screen">
+      {/* Masthead */}
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+        <a href="#" className="font-serif text-2xl tracking-tight">
+          Localscope<span className="text-accent">.</span>
+        </a>
+        <nav className="hidden items-center gap-8 text-sm text-muted-foreground sm:flex">
+          <a href="#brief" className="hover:text-foreground">Sample brief</a>
+          <a href="#how" className="hover:text-foreground">How it works</a>
+          <a href="#pricing" className="hover:text-foreground">Pricing</a>
+        </nav>
+        <a
+          href="#waitlist"
+          className="rounded-sm border border-ink px-4 py-2 text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground"
+        >
+          Get early access
+        </a>
+      </header>
+
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-6 pb-20 pt-10 md:pt-20">
+        <div className="rule-double pt-6">
+          <p className="eyebrow animate-fade">For salon & spa owners · Launching first in India</p>
+          <h1 className="mt-6 max-w-4xl text-5xl leading-[1.02] md:text-7xl animate-rise">
+            We watch your local market. <em className="text-accent">You</em> just read the brief.
+          </h1>
+          <p className="mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground animate-rise [animation-delay:120ms]">
+            Localscope continuously monitors competitors, reviews, and neighbourhood changes around your salon — then
+            tells you what changed, why it matters, and what to do about it. Every Monday, in two minutes.
+          </p>
+          <div className="mt-10 max-w-xl animate-rise [animation-delay:220ms]">
+            <WaitlistForm compact />
+          </div>
+        </div>
+      </section>
+
+      {/* Sample brief */}
+      <section id="brief" className="mx-auto max-w-6xl px-6 py-16">
+        <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:items-start">
+          <div className="lg:sticky lg:top-10">
+            <p className="eyebrow">What you get</p>
+            <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Not a dashboard. A brief.</h2>
+            <p className="mt-5 text-muted-foreground leading-relaxed">
+              Owners don't have time to study charts. Each week you get the three things that changed around you, ranked
+              by how much they matter, and one clear recommendation.
+            </p>
+            <ul className="mt-8 space-y-3 text-sm">
+              {[
+                ["bg-signal-red", "Red — act this week"],
+                ["bg-signal-amber", "Amber — keep an eye on it"],
+                ["bg-signal-green", "Green — something to lean into"],
+              ].map(([dot, text]) => (
+                <li key={text} className="flex items-center gap-3">
+                  <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
+                  <span className="text-muted-foreground">{text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <article className="paper-card rounded-md p-7 md:p-10 shadow-lift">
+            <div className="flex items-baseline justify-between border-b border-ink pb-4">
+              <div>
+                <p className="eyebrow">Weekly Market Brief</p>
+                <h3 className="mt-1 font-serif text-3xl">Radiance Salon, Indiranagar</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">Week of 31 Aug</p>
+            </div>
+
+            <ol className="divide-y divide-rule">
+              {SIGNALS.map((s, i) => {
+                const t = toneClasses[s.tone];
+                return (
+                  <li key={s.headline} className="flex gap-5 py-6">
+                    <span className="font-serif text-3xl text-muted-foreground/60">{String(i + 1).padStart(2, "0")}</span>
+                    <div>
+                      <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${t.chip}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
+                        {s.label}
+                      </span>
+                      <p className="mt-2 font-serif text-xl leading-snug">{s.headline}</p>
+                      <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{s.detail}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+
+            <div className="rule-top mt-2 pt-6">
+              <p className="eyebrow text-accent">Recommendation</p>
+              <p className="mt-2 font-serif text-2xl leading-snug">
+                Test a weekday promotion to blunt Glow Studio's price cut — and put “in and out in 40 minutes” at the
+                front of your Instagram bio and Google profile.
+              </p>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Why: your weekday afternoons are the slot most exposed to a cheaper competitor, and speed is the strength
+                customers already notice.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      {/* What we monitor */}
+      <section className="mx-auto max-w-6xl px-6 py-20">
+        <div className="rule-top pt-8">
+          <p className="eyebrow">What we monitor</p>
+          <h2 className="mt-4 max-w-2xl text-4xl leading-tight md:text-5xl">Everything happening within walking distance of your door.</h2>
+        </div>
+        <dl className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+          {MONITORS.map(([title, desc], i) => (
+            <div key={title} className="border-t border-rule pt-4">
+              <dt className="flex items-baseline gap-3 font-serif text-xl">
+                <span className="text-sm text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
+                {title}
+              </dt>
+              <dd className="mt-2 text-sm text-muted-foreground leading-relaxed">{desc}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {/* How it works */}
+      <section id="how" className="bg-paper-deep/70 border-y border-rule">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <p className="eyebrow">How it works</p>
+          <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Set up once. Read every Monday.</h2>
+          <ol className="mt-12 grid gap-10 md:grid-cols-3">
+            {STEPS.map(([title, desc], i) => (
+              <li key={title}>
+                <span className="font-serif text-6xl text-accent">{i + 1}</span>
+                <h3 className="mt-3 font-serif text-2xl">{title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{desc}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
+        <p className="eyebrow">Pricing</p>
+        <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Less than one lost regular customer.</h2>
+        <p className="mt-4 max-w-xl text-muted-foreground">Per month, per location. Early-access members lock in launch pricing for 12 months.</p>
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
+          {PLANS.map((p) => (
+            <div
+              key={p.name}
+              className={`paper-card flex flex-col rounded-md p-7 ${p.featured ? "border-ink shadow-lift md:-translate-y-3" : ""}`}
+            >
+              <div className="flex items-baseline justify-between">
+                <h3 className="font-serif text-2xl">{p.name}</h3>
+                {p.featured && <span className="eyebrow text-accent">Most popular</span>}
+              </div>
+              <p className="mt-4 font-serif text-5xl">
+                {p.price}
+                <span className="ml-1 font-sans text-sm text-muted-foreground">/mo</span>
+              </p>
+              <p className="mt-3 text-sm text-muted-foreground">{p.blurb}</p>
+              <ul className="mt-6 space-y-2 border-t border-rule pt-5 text-sm">
+                {p.items.map((it) => (
+                  <li key={it} className="flex gap-2">
+                    <span className="text-accent">—</span>
+                    {it}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href="#waitlist"
+                className={`mt-8 inline-block rounded-sm px-4 py-2.5 text-center text-sm font-medium transition-colors ${
+                  p.featured
+                    ? "bg-primary text-primary-foreground hover:bg-accent"
+                    : "border border-ink hover:bg-primary hover:text-primary-foreground"
+                }`}
+              >
+                Join waitlist
+              </a>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Waitlist */}
+      <section id="waitlist" className="mx-auto max-w-6xl px-6 py-20">
+        <div className="rule-double grid gap-10 pt-10 lg:grid-cols-2">
+          <div>
+            <p className="eyebrow">Early access</p>
+            <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Get your first brief free.</h2>
+            <p className="mt-5 text-muted-foreground leading-relaxed">
+              We're onboarding salons and spas city by city. Join the list and we'll send a sample brief for your own
+              neighbourhood before you pay a rupee.
+            </p>
+          </div>
+          <div className="paper-card rounded-md p-7">
+            <WaitlistForm />
+          </div>
+        </div>
+      </section>
+
+      <footer className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-rule px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:justify-between">
+        <p>© 2026 Localscope. AI market research for local businesses.</p>
+        <p>Starting with salons & spas. More verticals soon.</p>
+      </footer>
+    </main>
   );
 }
