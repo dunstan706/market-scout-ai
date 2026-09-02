@@ -91,6 +91,7 @@ Respond with JSON using EXACTLY these keys:
       });
       const output = await result.output;
       const brief = normalize(output);
+      if (!brief) console.error("brief: normalize failed", JSON.stringify(output));
       if (!brief) return { ok: false, error: "We couldn't assemble a brief just now. Please try again." };
       return { ok: true, brief };
     } catch (error) {
