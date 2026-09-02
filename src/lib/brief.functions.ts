@@ -27,14 +27,13 @@ export type Brief = z.infer<typeof BriefSchema>;
 const LooseBrief = z.object({
   title: z.string(),
   signals: z.array(
-    z.object({
-      tone: z.string().optional(),
-      status: z.string().optional(),
-      severity: z.string().optional(),
-      label: z.string(),
-      headline: z.string(),
-      detail: z.string(),
-    }),
+    z
+      .object({
+        label: z.string(),
+        headline: z.string(),
+        detail: z.string(),
+      })
+      .passthrough(),
   ),
   recommendation: z.string(),
   why: z.string(),
@@ -71,13 +70,14 @@ Respond with JSON using EXACTLY these keys:
       const parsed = LooseBrief.safeParse(raw);
       if (!parsed.success) return null;
       const signals = parsed.data.signals
-        .map((s) => ({
-          tone: (s.tone ?? s.status ?? s.severity ?? "amber") as Brief["signals"][number]["tone"],
-          label: s.label,
-          headline: s.headline,
-          detail: s.detail,
-        }))
-        .filter((s) => ["red", "amber", "green"].includes(s.tone))
+        .map((s) => {
+          const tone = Object.values(s).find(
+            (v): v is Brief["signals"][number]["tone"] =>
+              typeof v === "string" && ["red", "amber", "green"].includes(v.toLowerCase()),
+          );
+          return { tone: tone?.toLowerCase() as Brief["signals"][number]["tone"], label: s.label, headline: s.headline, detail: s.detail };
+        })
+        .filter((s) => !!s.tone)
         .slice(0, 3);
       if (signals.length === 0) return null;
       return { title: parsed.data.title, signals, recommendation: parsed.data.recommendation, why: parsed.data.why };
