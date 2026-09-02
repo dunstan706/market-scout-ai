@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { WaitlistForm } from "@/components/WaitlistForm";
+import { BriefCard, type Signal } from "@/components/BriefCard";
+import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -13,7 +15,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Localscope — Weekly market briefs for salons & spas" },
       {
         property: "og:description",
-        content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners in India.",
+        content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -22,21 +24,21 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const SIGNALS = [
+const SIGNALS: Signal[] = [
   {
-    tone: "red" as const,
+    tone: "red",
     label: "Price move",
     headline: "Glow Studio dropped haircut prices by 15%",
-    detail: "₹600 → ₹510 for women's cuts, listed on Google and Instagram since Tuesday.",
+    detail: "$60 → $51 for women's cuts, listed on Google and Instagram since Tuesday.",
   },
   {
-    tone: "amber" as const,
+    tone: "amber",
     label: "New entrant",
-    headline: "New salon opening 700 m away on 12th Main",
+    headline: "New salon opening 700 m away on Main Street",
     detail: "Shop board went up this week; hiring posts for 3 stylists on Instagram.",
   },
   {
-    tone: "green" as const,
+    tone: "green",
     label: "Your reviews",
     headline: "Customers increasingly praise your fast service",
     detail: "“Quick” and “no waiting” mentioned in 9 of your last 14 reviews (up from 3).",
@@ -45,7 +47,7 @@ const SIGNALS = [
 
 const MONITORS = [
   ["Competitor prices & services", "Menu changes, new treatments, package deals"],
-  ["Promotions & offers", "Festival discounts, first-visit deals, combo pricing"],
+  ["Promotions & offers", "Seasonal discounts, first-visit deals, combo pricing"],
   ["Reviews & sentiment", "What customers praise or complain about — yours and theirs"],
   ["New openings & closures", "Salons arriving, expanding, or shutting nearby"],
   ["Social & web activity", "Instagram posts, website updates, hiring signals"],
@@ -61,30 +63,30 @@ const STEPS = [
 const PLANS = [
   {
     name: "Watch",
-    price: "₹1,000",
+    price: "$15",
+    period: "/mo",
     blurb: "Weekly brief for one location, up to 5 competitors.",
     items: ["Weekly Market Brief", "Prices, promotions & hours", "Review sentiment summary"],
+    cta: "Join waitlist",
   },
   {
     name: "Advise",
-    price: "₹3,500",
+    price: "$50",
+    period: "/mo",
     blurb: "Deeper intelligence plus recommendations you can act on.",
     items: ["Everything in Watch", "Up to 15 competitors", "New openings & closures", "Actionable recommendations", "Instant alerts on big moves"],
     featured: true,
+    cta: "Join waitlist",
   },
   {
     name: "Expand",
-    price: "₹7,500+",
+    price: "Ask for a quote",
+    period: "",
     blurb: "Multi-location owners and those planning the next branch.",
     items: ["Everything in Advise", "Multiple locations", "Neighbourhood development tracking", "Next-location recommendations"],
+    cta: "Ask for a quote",
   },
 ];
-
-const toneClasses = {
-  red: { dot: "bg-signal-red", chip: "bg-signal-red-soft text-signal-red" },
-  amber: { dot: "bg-signal-amber", chip: "bg-signal-amber-soft text-signal-amber" },
-  green: { dot: "bg-signal-green", chip: "bg-signal-green-soft text-signal-green" },
-};
 
 function Index() {
   return (
