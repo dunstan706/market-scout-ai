@@ -100,6 +100,7 @@ function Index() {
           <a href="#brief" className="hover:text-foreground">Sample brief</a>
           <a href="#how" className="hover:text-foreground">How it works</a>
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
+          <a href="#try" className="hover:text-foreground">Try it</a>
         </nav>
         <a
           href="#waitlist"
