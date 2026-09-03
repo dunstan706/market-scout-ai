@@ -175,7 +175,7 @@ export function AnimatedNavFramer({
             variants={itemVariants}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "flex-shrink-0 rounded-full bg-primary px-3.5 py-1.5 mx-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent",
+              "flex-shrink-0 rounded-full bg-primary px-3.5 py-1.5 ml-2 mr-4 md:mr-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent",
               !isExpanded && "pointer-events-none"
             )}
           >
