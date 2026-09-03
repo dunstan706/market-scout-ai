@@ -1,5 +1,10 @@
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+const OVERPASS_URLS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
+const OVERPASS_TIMEOUT_MS = 40_000;
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const USER_AGENT = "Localscope/1.0 (local market research demo)";
@@ -144,7 +149,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     },
     signal: AbortSignal.timeout(9000),
   });
-  if (!response.ok) throw new Error(`Research source returned ${response.status}`);
+  if (!response.ok) {
+    let reason = "";
+    try {
+      const body = (await response.json()) as { error?: { message?: string; status?: string; details?: Array<{ reason?: string }> } };
+      reason = body.error?.details?.[0]?.reason ?? body.error?.status ?? body.error?.message ?? "";
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(`Research source returned ${response.status}${reason ? ` (${reason})` : ""}`);
+  }
   return (await response.json()) as T;
 }
 
@@ -332,15 +346,24 @@ async function queryOverpass(
 ${filters.map((filter) => `  ${around}${filter};`).join("\n")}
 );
 out center tags;`;
-  const response = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain", Accept: "application/json", "User-Agent": USER_AGENT },
-    body: query,
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) throw new Error(`OpenStreetMap returned ${response.status}`);
-  const payload = (await response.json()) as { elements?: OverpassElement[] };
-  return payload.elements ?? [];
+  let lastError: unknown;
+  for (const endpoint of OVERPASS_URLS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Accept: "application/json", "User-Agent": USER_AGENT },
+        body: query,
+        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`OpenStreetMap returned ${response.status}`);
+      const payload = (await response.json()) as { elements?: OverpassElement[] };
+      return payload.elements ?? [];
+    } catch (error) {
+      lastError = error;
+      console.warn(`overpass mirror failed: ${endpoint}`, error instanceof Error ? error.message : error);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("OpenStreetMap could not be reached");
 }
 
 function mapOpenStreetMapCompetitors(
@@ -351,7 +374,7 @@ function mapOpenStreetMapCompetitors(
   const normalizedName = businessName.toLocaleLowerCase().trim();
   const seen = new Set<string>();
   return elements
-    .map((element) => {
+    .map((element): ResearchCompetitor | null => {
       const tags = element.tags ?? {};
       const latitude = element.lat ?? element.center?.lat;
       const longitude = element.lon ?? element.center?.lon;
@@ -381,7 +404,7 @@ function mapOpenStreetMapCompetitors(
         priceSamples,
         sourceUrl,
         sourceLabel: "OpenStreetMap",
-      } satisfies ResearchCompetitor;
+      };
     })
     .filter((value): value is ResearchCompetitor => !!value);
 }
@@ -574,7 +597,15 @@ export async function collectLocalResearch(input: {
     if (googleReached) {
       sources.push({ label: "Google Places", url: "https://maps.google.com/", kind: "reviews" });
     } else {
-      warnings.push("Google Places could not be reached for this request.");
+      const reason = googleResult.status === "rejected" && googleResult.reason instanceof Error ? googleResult.reason.message : "";
+      console.error("google places failed", reason);
+      if (/403|PERMISSION_DENIED|API_KEY_SERVICE_BLOCKED|REQUEST_DENIED/i.test(reason)) {
+        warnings.push(
+          "Google Places rejected the API key: enable \"Places API (New)\" for the key's project and allow it in the key's API restrictions.",
+        );
+      } else {
+        warnings.push(`Google Places could not be reached for this request${reason ? ` (${reason})` : ""}.`);
+      }
     }
   } else {
     warnings.push("Google Places is not connected, so coverage in lesser-known areas may be limited.");
