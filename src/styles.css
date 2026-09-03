@@ -195,3 +195,9 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Scroll-triggered reveals: content is hidden only after the client arms it,
+   so no-JS and SSR users always see everything. */
+.ls-reveal-pending {
+  opacity: 0;
+}

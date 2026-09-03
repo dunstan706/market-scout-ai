@@ -3,6 +3,7 @@ import { WaitlistForm } from "@/components/WaitlistForm";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
 import { AuthNavLink } from "@/components/AuthNavLink";
+import { Reveal } from "@/components/Reveal";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -136,7 +137,7 @@ function Index() {
       {/* Sample brief */}
       <section id="brief" className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:items-start">
-          <div className="lg:sticky lg:top-10">
+          <Reveal className="lg:sticky lg:top-10">
             <p className="eyebrow">What you get</p>
             <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Not a dashboard. A brief.</h2>
             <p className="mt-5 text-muted-foreground leading-relaxed">
@@ -155,8 +156,9 @@ function Index() {
                 </li>
               ))}
             </ul>
-          </div>
+          </Reveal>
 
+          <Reveal delayMs={140}>
           <BriefCard
             title="Radiance Salon, Riverside"
             dateLabel="Week of 31 Aug"
@@ -164,24 +166,25 @@ function Index() {
             recommendation="Test a weekday promotion to blunt Glow Studio's price cut — and put “in and out in 40 minutes” at the front of your Instagram bio and Google profile."
             why="your weekday afternoons are the slot most exposed to a cheaper competitor, and speed is the strength customers already notice."
           />
+          </Reveal>
         </div>
       </section>
 
       {/* What we monitor */}
       <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="rule-top pt-8">
+        <Reveal className="rule-top pt-8">
           <p className="eyebrow">What we monitor</p>
           <h2 className="mt-4 max-w-2xl text-4xl leading-tight md:text-5xl">Everything happening within walking distance of your door.</h2>
-        </div>
+        </Reveal>
         <dl className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
           {MONITORS.map(([title, desc], i) => (
-            <div key={title} className="border-t border-rule pt-4">
+            <Reveal key={title} delayMs={i * 60} className="border-t border-rule pt-4">
               <dt className="flex items-baseline gap-3 font-serif text-xl">
                 <span className="text-sm text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
                 {title}
               </dt>
               <dd className="mt-2 text-sm text-muted-foreground leading-relaxed">{desc}</dd>
-            </div>
+            </Reveal>
           ))}
         </dl>
       </section>
@@ -189,14 +192,18 @@ function Index() {
       {/* How it works */}
       <section id="how" className="bg-paper-deep/70 border-y border-rule">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <p className="eyebrow">How it works</p>
-          <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Set up once. Read every Monday.</h2>
+          <Reveal>
+            <p className="eyebrow">How it works</p>
+            <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Set up once. Read every Monday.</h2>
+          </Reveal>
           <ol className="mt-12 grid gap-10 md:grid-cols-3">
             {STEPS.map(([title, desc], i) => (
               <li key={title}>
+                <Reveal delayMs={i * 100} className="h-full">
                 <span className="font-serif text-6xl text-accent">{i + 1}</span>
                 <h3 className="mt-3 font-serif text-2xl">{title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{desc}</p>
+                </Reveal>
               </li>
             ))}
           </ol>
@@ -205,14 +212,16 @@ function Index() {
 
       {/* Pricing */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
-        <p className="eyebrow">Pricing</p>
-        <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Less than one lost regular customer.</h2>
-        <p className="mt-4 max-w-xl text-muted-foreground">Per month, per location. Early-access members lock in launch pricing for 12 months.</p>
+        <Reveal>
+          <p className="eyebrow">Pricing</p>
+          <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Less than one lost regular customer.</h2>
+          <p className="mt-4 max-w-xl text-muted-foreground">Per month, per location. Early-access members lock in launch pricing for 12 months.</p>
+        </Reveal>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {PLANS.map((p) => (
+          {PLANS.map((p, i) => (
+            <Reveal key={p.name} delayMs={i * 90} className="h-full">
             <div
-              key={p.name}
-              className={`paper-card flex flex-col rounded-md p-7 ${p.featured ? "border-ink shadow-lift md:-translate-y-3" : ""}`}
+              className={`paper-card flex h-full flex-col rounded-md p-7 ${p.featured ? "border-ink shadow-lift md:-translate-y-3" : ""}`}
             >
               <div className="flex items-baseline justify-between">
                 <h3 className="font-serif text-2xl">{p.name}</h3>
@@ -246,6 +255,7 @@ function Index() {
                 </span>
               </a>
             </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -253,12 +263,15 @@ function Index() {
       {/* Generate sample brief */}
       <section id="try" className="bg-paper-deep/70 border-y border-rule">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <SampleBriefGenerator />
+          <Reveal>
+            <SampleBriefGenerator />
+          </Reveal>
         </div>
       </section>
 
       {/* Waitlist */}
       <section id="waitlist" className="mx-auto max-w-6xl px-6 py-20">
+        <Reveal>
         <div className="rule-double grid gap-10 pt-10 lg:grid-cols-2">
           <div>
             <p className="eyebrow">Early access</p>
@@ -272,6 +285,7 @@ function Index() {
             <WaitlistForm />
           </div>
         </div>
+        </Reveal>
       </section>
 
       <footer className="mx-auto flex max-w-6xl flex-col gap-3 border-t border-rule px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
