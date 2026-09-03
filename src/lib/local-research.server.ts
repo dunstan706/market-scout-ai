@@ -1,7 +1,12 @@
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
+const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const USER_AGENT = "Localscope/1.0 (local market research demo)";
+const NEARBY_RADIUS_METERS = 5_000;
+const WIDE_RADIUS_METERS = 15_000;
+const THIN_COVERAGE_COUNT = 3;
+const SAME_PLACE_METERS = 150;
 
 export type ResearchSource = {
   label: string;
@@ -12,6 +17,8 @@ export type ResearchSource = {
 export type ResearchCompetitor = {
   name: string;
   distanceMeters: number;
+  latitude?: number | undefined;
+  longitude?: number | undefined;
   address?: string | undefined;
   website?: string | undefined;
   phone?: string | undefined;
@@ -75,6 +82,14 @@ type GoogleSearchResponse = {
   places?: GooglePlace[];
 };
 
+type GoogleGeocodeResponse = {
+  status?: string;
+  results?: Array<{
+    formatted_address?: string;
+    geometry?: { location?: { lat?: number; lng?: number } };
+  }>;
+};
+
 type WebsiteEvidence = {
   prices: string[];
   rating?: number | undefined;
@@ -84,6 +99,28 @@ type WebsiteEvidence = {
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
+}
+
+function googleApiKey(): string | undefined {
+  return process.env["GOOGLE_PLACES_API_KEY"] || process.env["GOOGLE_MAPS_API_KEY"];
+}
+
+function normalizeName(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(the|salon|spa|ltd|limited|llc|inc)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function namesLikelyMatch(a: string, b: string): boolean {
+  const left = normalizeName(a);
+  const right = normalizeName(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return left.includes(right) || right.includes(left);
 }
 
 function text(value: unknown): string | undefined {
@@ -208,7 +245,7 @@ async function collectWebsiteEvidence(url: string): Promise<WebsiteEvidence> {
   return readJsonLdEvidence(html);
 }
 
-async function geocode(location: string): Promise<{ displayName: string; latitude: number; longitude: number }> {
+async function geocodeNominatim(location: string): Promise<{ displayName: string; latitude: number; longitude: number }> {
   const url = new URL(NOMINATIM_URL);
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("limit", "1");
@@ -227,16 +264,72 @@ async function geocode(location: string): Promise<{ displayName: string; latitud
   };
 }
 
-async function fetchOpenStreetMapCompetitors(
+async function geocodeGoogle(location: string): Promise<{ displayName: string; latitude: number; longitude: number } | undefined> {
+  const apiKey = googleApiKey();
+  if (!apiKey) return undefined;
+  const url = new URL(GOOGLE_GEOCODE_URL);
+  url.searchParams.set("address", location);
+  url.searchParams.set("key", apiKey);
+  const payload = await fetchJson<GoogleGeocodeResponse>(url.toString());
+  const match = payload.results?.[0];
+  const latitude = number(match?.geometry?.location?.lat);
+  const longitude = number(match?.geometry?.location?.lng);
+  if (payload.status !== "OK" || !match || latitude === undefined || longitude === undefined) {
+    return undefined;
+  }
+  return {
+    displayName: text(match.formatted_address) ?? location,
+    latitude,
+    longitude,
+  };
+}
+
+async function geocode(location: string): Promise<{ displayName: string; latitude: number; longitude: number }> {
+  try {
+    return await geocodeNominatim(location);
+  } catch (error) {
+    try {
+      const googleMatch = await geocodeGoogle(location);
+      if (googleMatch) return googleMatch;
+    } catch {
+      // Fall through to the original Nominatim error.
+    }
+    throw error;
+  }
+}
+
+function overpassTagFilters(businessType: string, relaxed: boolean): string[] {
+  if (!relaxed && businessType === "salon") {
+    return [
+      '["name"]["shop"~"hairdresser|beauty|cosmetics|perfumery"]',
+      '["name"]["amenity"~"spa|beauty_salon"]',
+      '["name"]["craft"="hairdresser"]',
+    ];
+  }
+  if (!relaxed && businessType === "spa") {
+    return [
+      '["name"]["amenity"~"spa|beauty_salon"]',
+      '["name"]["leisure"="spa"]',
+      '["name"]["shop"~"beauty|cosmetics|massage"]',
+    ];
+  }
+  return [
+    '["name"]["shop"]',
+    '["name"]["craft"]',
+    '["name"]["office"]',
+    '["name"]["amenity"~"cafe|restaurant|fast_food|bar|pub|pharmacy|clinic|studio|marketplace|beauty_salon|spa"]',
+  ];
+}
+
+async function queryOverpass(
   location: { latitude: number; longitude: number },
-  businessName: string,
-): Promise<ResearchCompetitor[]> {
-  const query = `
-[out:json][timeout:20];
+  radiusMeters: number,
+  filters: string[],
+): Promise<OverpassElement[]> {
+  const around = `nwr(around:${radiusMeters},${location.latitude},${location.longitude})`;
+  const query = `[out:json][timeout:20];
 (
-  nwr(around:5000,${location.latitude},${location.longitude})["name"]["shop"~"hairdresser|beauty|cosmetics|perfumery"];
-  nwr(around:5000,${location.latitude},${location.longitude})["name"]["amenity"~"spa|beauty_salon"];
-  nwr(around:5000,${location.latitude},${location.longitude})["name"]["craft"="hairdresser"];
+${filters.map((filter) => `  ${around}${filter};`).join("\n")}
 );
 out center tags;`;
   const response = await fetch(OVERPASS_URL, {
@@ -247,9 +340,17 @@ out center tags;`;
   });
   if (!response.ok) throw new Error(`OpenStreetMap returned ${response.status}`);
   const payload = (await response.json()) as { elements?: OverpassElement[] };
+  return payload.elements ?? [];
+}
+
+function mapOpenStreetMapCompetitors(
+  elements: OverpassElement[],
+  location: { latitude: number; longitude: number },
+  businessName: string,
+): ResearchCompetitor[] {
   const normalizedName = businessName.toLocaleLowerCase().trim();
   const seen = new Set<string>();
-  return (payload.elements ?? [])
+  return elements
     .map((element) => {
       const tags = element.tags ?? {};
       const latitude = element.lat ?? element.center?.lat;
@@ -270,6 +371,8 @@ out center tags;`;
       return {
         name,
         distanceMeters,
+        latitude,
+        longitude,
         ...(address ? { address } : {}),
         ...(website ? { website } : {}),
         ...(text(tags["phone"] ?? tags["contact:phone"]) ? { phone: text(tags["phone"] ?? tags["contact:phone"]) } : {}),
@@ -280,7 +383,19 @@ out center tags;`;
         sourceLabel: "OpenStreetMap",
       } satisfies ResearchCompetitor;
     })
-    .filter((value): value is ResearchCompetitor => !!value)
+    .filter((value): value is ResearchCompetitor => !!value);
+}
+
+async function fetchOpenStreetMapCompetitors(
+  location: { latitude: number; longitude: number },
+  businessName: string,
+  businessType: string,
+  options?: { radiusMeters?: number; relaxed?: boolean },
+): Promise<ResearchCompetitor[]> {
+  const radiusMeters = options?.radiusMeters ?? NEARBY_RADIUS_METERS;
+  const relaxed = options?.relaxed ?? businessType === "other";
+  const elements = await queryOverpass(location, radiusMeters, overpassTagFilters(businessType, relaxed));
+  return mapOpenStreetMapCompetitors(elements, location, businessName)
     .sort((a, b) => a.distanceMeters - b.distanceMeters)
     .slice(0, 12);
 }
@@ -296,12 +411,21 @@ function googlePriceLevel(value: string | undefined): string | undefined {
   return value ? levels[value] : undefined;
 }
 
+function placesQueryLabel(businessType: string): string {
+  if (businessType === "salon") return "hair salon beauty salon";
+  if (businessType === "spa") return "spa wellness";
+  return "local business";
+}
+
 async function fetchGoogleCompetitors(
-  location: { latitude: number; longitude: number },
+  location: { displayName: string; latitude: number; longitude: number },
+  businessName: string,
   businessType: string,
+  radiusMeters = NEARBY_RADIUS_METERS,
 ): Promise<ResearchCompetitor[]> {
-  const apiKey = process.env["GOOGLE_PLACES_API_KEY"];
+  const apiKey = googleApiKey();
   if (!apiKey) return [];
+  const ownName = businessName.toLocaleLowerCase().trim();
   const response = await fetchJson<GoogleSearchResponse>(GOOGLE_PLACES_URL, {
     method: "POST",
     headers: {
@@ -311,13 +435,13 @@ async function fetchGoogleCompetitors(
         "places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.websiteUri,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.reviews",
     },
     body: JSON.stringify({
-      textQuery: `${businessType === "other" ? "local business" : businessType} near ${location.latitude},${location.longitude}`,
-      maxResultCount: 10,
+      textQuery: `${placesQueryLabel(businessType)} near ${location.displayName}`,
+      maxResultCount: 12,
       languageCode: "en",
       locationBias: {
         circle: {
           center: { latitude: location.latitude, longitude: location.longitude },
-          radius: 5000,
+          radius: radiusMeters,
         },
       },
     }),
@@ -327,6 +451,7 @@ async function fetchGoogleCompetitors(
     const latitude = number(place.location?.latitude);
     const longitude = number(place.location?.longitude);
     if (!name || latitude === undefined || longitude === undefined) return [];
+    if (name.toLocaleLowerCase() === ownName) return [];
     const review = place.reviews?.find((item) => text(item.text?.text));
     const mapUrl = text(place.googleMapsUri) ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
     const hours = place.currentOpeningHours?.weekdayDescriptions?.slice(0, 2).join(" · ");
@@ -334,6 +459,8 @@ async function fetchGoogleCompetitors(
       {
         name,
         distanceMeters: distanceInMeters(location.latitude, location.longitude, latitude, longitude),
+        latitude,
+        longitude,
         ...(text(place.formattedAddress) ? { address: text(place.formattedAddress) } : {}),
         ...(text(place.websiteUri) ? { website: text(place.websiteUri) } : {}),
         ...(text(place.nationalPhoneNumber) ? { phone: text(place.nationalPhoneNumber) } : {}),
@@ -350,28 +477,59 @@ async function fetchGoogleCompetitors(
   });
 }
 
-function mergeCompetitors(osm: ResearchCompetitor[], google: ResearchCompetitor[]): ResearchCompetitor[] {
-  const result = [...osm];
-  for (const googlePlace of google.sort((a, b) => a.distanceMeters - b.distanceMeters)) {
-    const match = result.find(
-      (candidate) =>
-        candidate.name.toLocaleLowerCase() === googlePlace.name.toLocaleLowerCase() ||
-        (candidate.address && googlePlace.address && candidate.address.toLocaleLowerCase().includes(googlePlace.address.toLocaleLowerCase())),
-    );
+function isSameCompetitor(a: ResearchCompetitor, b: ResearchCompetitor): boolean {
+  if (!namesLikelyMatch(a.name, b.name)) return false;
+  if (
+    a.latitude !== undefined &&
+    a.longitude !== undefined &&
+    b.latitude !== undefined &&
+    b.longitude !== undefined
+  ) {
+    return distanceInMeters(a.latitude, a.longitude, b.latitude, b.longitude) <= SAME_PLACE_METERS;
+  }
+  return Math.abs(a.distanceMeters - b.distanceMeters) <= 250;
+}
+
+function enrichFromSecondary(primary: ResearchCompetitor, secondary: ResearchCompetitor): ResearchCompetitor {
+  return {
+    ...primary,
+    distanceMeters: Math.min(primary.distanceMeters, secondary.distanceMeters),
+    latitude: primary.latitude ?? secondary.latitude,
+    longitude: primary.longitude ?? secondary.longitude,
+    address: primary.address ?? secondary.address,
+    website: primary.website ?? secondary.website,
+    phone: primary.phone ?? secondary.phone,
+    openingHours: primary.openingHours ?? secondary.openingHours,
+    openingDate: primary.openingDate ?? secondary.openingDate,
+    priceLevel: primary.priceLevel ?? secondary.priceLevel,
+    rating: primary.rating ?? secondary.rating,
+    reviewCount: primary.reviewCount ?? secondary.reviewCount,
+    reviewQuote: primary.reviewQuote ?? secondary.reviewQuote,
+    priceSamples: unique([...primary.priceSamples, ...secondary.priceSamples]),
+  };
+}
+
+function mergeCompetitors(google: ResearchCompetitor[], osm: ResearchCompetitor[]): ResearchCompetitor[] {
+  const result = [...google].sort((a, b) => a.distanceMeters - b.distanceMeters);
+  for (const osmPlace of osm.sort((a, b) => a.distanceMeters - b.distanceMeters)) {
+    const match = result.find((candidate) => isSameCompetitor(candidate, osmPlace));
     if (!match) {
-      result.push(googlePlace);
+      result.push(osmPlace);
       continue;
     }
-    Object.assign(match, {
-      ...googlePlace,
-      name: match.name,
-      distanceMeters: Math.min(match.distanceMeters, googlePlace.distanceMeters),
-      sourceUrl: googlePlace.sourceUrl,
-      sourceLabel: googlePlace.sourceLabel,
-      priceSamples: unique([...match.priceSamples, ...googlePlace.priceSamples]),
-    });
+    Object.assign(match, enrichFromSecondary(match, osmPlace));
   }
   return result.sort((a, b) => a.distanceMeters - b.distanceMeters).slice(0, 12);
+}
+
+function mergeDirectoryLists(primary: ResearchCompetitor[], extra: ResearchCompetitor[]): ResearchCompetitor[] {
+  const result = [...primary];
+  for (const candidate of extra) {
+    if (!result.some((existing) => isSameCompetitor(existing, candidate))) {
+      result.push(candidate);
+    }
+  }
+  return result;
 }
 
 export async function collectLocalResearch(input: {
@@ -381,25 +539,49 @@ export async function collectLocalResearch(input: {
 }): Promise<ResearchSnapshot> {
   const resolvedLocation = await geocode(input.location);
   const warnings: string[] = [];
-  const sources: ResearchSource[] = [
-    { label: "OpenStreetMap", url: "https://www.openstreetmap.org/", kind: "directory" },
-  ];
+  const sources: ResearchSource[] = [];
+  const placesKey = googleApiKey();
 
   const [osmResult, googleResult] = await Promise.allSettled([
-    fetchOpenStreetMapCompetitors(resolvedLocation, input.businessName),
-    fetchGoogleCompetitors(resolvedLocation, input.businessType),
+    fetchOpenStreetMapCompetitors(resolvedLocation, input.businessName, input.businessType),
+    fetchGoogleCompetitors(resolvedLocation, input.businessName, input.businessType),
   ]);
-  const osmCompetitors = osmResult.status === "fulfilled" ? osmResult.value : [];
-  const googleCompetitors = googleResult.status === "fulfilled" ? googleResult.value : [];
+  let osmCompetitors = osmResult.status === "fulfilled" ? osmResult.value : [];
+  let googleCompetitors = googleResult.status === "fulfilled" ? googleResult.value : [];
+  let googleReached = googleResult.status === "fulfilled";
   if (osmResult.status === "rejected") warnings.push("OpenStreetMap could not be reached for this request.");
-  if (process.env["GOOGLE_PLACES_API_KEY"]) {
-    if (googleResult.status === "rejected") warnings.push("Google Places could not be reached for this request.");
-    else sources.push({ label: "Google Places", url: "https://maps.google.com/", kind: "reviews" });
-  } else {
-    warnings.push("Google Places is not connected, so customer ratings and review quotes may be limited.");
+
+  if (mergeCompetitors(googleCompetitors, osmCompetitors).length < THIN_COVERAGE_COUNT) {
+    const fallbacks = await Promise.allSettled([
+      fetchOpenStreetMapCompetitors(resolvedLocation, input.businessName, input.businessType, {
+        radiusMeters: WIDE_RADIUS_METERS,
+        relaxed: true,
+      }),
+      placesKey
+        ? fetchGoogleCompetitors(resolvedLocation, input.businessName, input.businessType, WIDE_RADIUS_METERS)
+        : Promise.resolve([] as ResearchCompetitor[]),
+    ]);
+    if (fallbacks[0].status === "fulfilled") {
+      osmCompetitors = mergeDirectoryLists(osmCompetitors, fallbacks[0].value);
+    }
+    if (fallbacks[1].status === "fulfilled") {
+      googleReached = googleReached || Boolean(placesKey);
+      googleCompetitors = mergeDirectoryLists(googleCompetitors, fallbacks[1].value);
+    }
   }
 
-  const competitors = mergeCompetitors(osmCompetitors, googleCompetitors);
+  if (placesKey) {
+    if (googleReached) {
+      sources.push({ label: "Google Places", url: "https://maps.google.com/", kind: "reviews" });
+    } else {
+      warnings.push("Google Places could not be reached for this request.");
+    }
+  } else {
+    warnings.push("Google Places is not connected, so coverage in lesser-known areas may be limited.");
+  }
+  sources.push({ label: "OpenStreetMap", url: "https://www.openstreetmap.org/", kind: "directory" });
+
+  const competitors = mergeCompetitors(googleCompetitors, osmCompetitors);
   const websiteCandidates = competitors.filter((competitor) => competitor.website).slice(0, 6);
   const websiteResults = await Promise.allSettled(
     websiteCandidates.map(async (competitor) => ({
