@@ -53,6 +53,13 @@ back up.
       one instance — both are in-memory today (noted in
       `rate-limit.server.ts` and `cache.server.ts`).
 
+## 4. Housekeeping
+
+- [ ] Untrack `.env` and add it to `.gitignore` (`git rm --cached .env`) so
+      credentials added there can never be committed. It is tracked today from
+      an early commit but holds only publishable Supabase keys — no secrets in
+      history.
+
 ## On hold — Resend email delivery (set aside for now)
 
 - [ ] Set `RESEND_API_KEY` and verify a `RESEND_FROM` sender in Resend.
