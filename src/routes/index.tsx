@@ -102,7 +102,7 @@ function Index() {
   const steps = useGridCols<HTMLOListElement>();
   const pricing = useGridCols<HTMLDivElement>();
   return (
-    <main id="top" className="landing-dark relative min-h-screen">
+    <main id="top" className="theme-dark relative min-h-screen">
       <ConstellationGrid className="fixed inset-0 h-screen w-full" />
       <AnimatedNavFramer
         logo={

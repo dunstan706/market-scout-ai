@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { ConstellationGrid } from "@/components/ConstellationGrid";
 
 export function AuthLayout({
   eyebrow,
@@ -15,8 +16,9 @@ export function AuthLayout({
   footer?: ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md">
+    <main className="theme-dark relative flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <ConstellationGrid className="fixed inset-0 h-screen w-full" />
+      <div className="relative w-full max-w-md">
         <Link to="/" className="block text-center font-serif text-3xl tracking-tight">
           Localscope<span className="text-accent">.</span>
         </Link>

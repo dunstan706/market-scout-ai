@@ -243,7 +243,7 @@
    Both the raw tokens and the --color-* aliases are overridden because compiled
    utilities reference the aliases while a few custom properties reference the
    raw values directly. */
-.landing-dark {
+.theme-dark {
   --paper: oklch(0.955 0.017 85);
   --paper-deep: oklch(0.26 0.01 45);
   --ink: oklch(0.955 0.017 85 / 0.85);
