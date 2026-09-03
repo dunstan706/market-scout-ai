@@ -95,6 +95,76 @@ export const getMyProfile = createServerFn({ method: "POST" })
     return { profile: toProfile(data) };
   });
 
+// Business-facing view of an account's business (one per account while the
+// free tier caps at 1; the multi-business data model ships later).
+export type Business = {
+  id: string;
+  businessName: string;
+  businessType: BusinessType;
+  location: string;
+};
+
+function toBusiness(row: ProfileRow): Business {
+  const businessType: BusinessType =
+    row.business_type === "spa" || row.business_type === "other" ? row.business_type : "salon";
+  return {
+    id: row.id,
+    businessName: row.business_name ?? "",
+    businessType,
+    location: row.location ?? "",
+  };
+}
+
+export const listBusinesses = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ businesses: Business[] }> => {
+    const { data, error } = await context.supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (error) console.error("listBusinesses failed", error);
+    return { businesses: data ? [toBusiness(data)] : [] };
+  });
+
+// Adds the account's first (and, on the free tier, only) business. The
+// soft-cap is enforced here server-side so the UI limit can't be bypassed.
+export const createBusiness = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => ProfileInput.parse(input))
+  .handler(async ({ data, context }): Promise<{ business: Business }> => {
+    const { data: existing } = await context.supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (existing) {
+      throw new Error(
+        describeError(
+          "Your plan includes one business.",
+          "Free accounts monitor a single business — paid plans (coming soon) add more.",
+        ),
+      );
+    }
+    const row = {
+      id: context.userId,
+      business_name: data.businessName,
+      business_type: data.businessType,
+      location: data.location,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: created, error } = await context.supabase
+      .from("profiles")
+      .upsert(row, { onConflict: "id" })
+      .select("*")
+      .maybeSingle();
+    if (error || !created) {
+      console.error("createBusiness failed", error);
+      throw new Error(describeError("Could not add your business.", error?.message));
+    }
+    return { business: toBusiness(created) };
+  });
+
 // Probes whether the tables the dashboard writes to exist (they're created by
 // the setup migrations, not by the app). Runs through the user's scoped client
 // so it mirrors exactly what saveProfile / generateMonitoringBrief will hit.

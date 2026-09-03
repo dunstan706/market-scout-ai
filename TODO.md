@@ -44,6 +44,23 @@ back up.
 ## 3. Product backlog (after validation)
 
 - [ ] Stripe billing / paid plans (deliberately deferred until demand is proven).
+- [ ] **Multi-business support** (design agreed in discussion, not built yet):
+      business-first dashboard rail — add businesses, click one to swap the
+      main panel, with **Details / Monitoring / Run scan** shown as tabs;
+      each business keeps its own scan history and briefs. Requires a
+      `businesses` table migration + linking snapshots/briefs by
+      `business_id`, server-fn rework, and cron per business. Decisions so
+      far:
+      - "Details" naming agreed for the first tab.
+      - All businesses share one weekly run cadence for now (per-business
+        schedules later).
+      - No delete-business UX in v1 (revisit when plans/downgrades exist).
+      - Tier caps when billing lands: **$15 plan = 1 business, $50 plan =
+        up to 5, Enterprise ("ask for a quote") = unlimited**.
+      - Until billing: free accounts soft-cap at 1 business, but the
+        "Add a new Business" button **stays visible** and routes to an
+        **upgrade/plan page** — build that page later (see Stripe item
+        above); it's where the $15/$50/Enterprise tiers get presented.
 - [ ] The owner's own review signal — the "green" opportunity signal about
       *their* business, not just competitors.
 - [ ] Watching for brand-new buildings / closures — intentionally not claimed
