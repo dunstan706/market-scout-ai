@@ -4,22 +4,20 @@ Everything that still needs doing, grouped by priority. Resend/email items are
 quarantined at the bottom ("on hold") — see the note there before picking them
 back up.
 
-## 1. Unblock the live app (blocking)
+## 1. Unblock the live app (done)
 
-- [ ] **Apply the three Supabase migrations** — the SQL for each is in the chat
-      history (or use `npx supabase db push` after `npx supabase link`):
-      1. `profiles` + `briefs` tables (RLS + grants)
-      2. `monitoring_snapshots` table (RLS + grants)
-      3. `briefs.emailed_at` + `waitlist_signups.user_id` (partly for email,
-         but the `user_id` column is also what powers waitlist → account claim)
-      Until these run, "Could not save your profile" keeps failing — the tables
-      don't exist in the Supabase project yet.
-- [ ] **Commit & push the pending local fixes** — route-tree regeneration,
-      `parsePrice` fixes (€9,50 / INR 1,200), brief-title double space,
-      `inputValidator` → `validator` deprecations, and the lazy-loaded
-      Supabase bundle (landing chunk 563 kB → 350 kB).
-- [ ] **Decide on the `npm i` edits** to `package.json`/`package-lock.json`
-      (npm normalized the vite version to a caret) — commit them or revert.
+- [x] **Apply the three Supabase migrations** — verified against the live
+      project `gosbzrvxqwstzyhscufs` (Sep 3): `profiles`, `briefs`,
+      `monitoring_snapshots`, and `waitlist_signups` all respond HTTP 200
+      via the REST API, and both Block-3 columns (`briefs.emailed_at`,
+      `waitlist_signups.user_id`) exist. The earlier
+      "Could not save your profile" error is resolved.
+- [x] **Commit & push the pending local fixes** — done in `5ecd830`
+      (route-tree regeneration, `parsePrice` fixes, test-helper fixes,
+      `inputValidator` → `validator`, lazy-loaded Supabase bundle).
+- [x] **Decide on the `npm i` edits** to `package.json`/lockfile —
+      committed in `5ecd830` (adds the missing vitest entry, npm-registry
+      URLs).
 
 ## 2. Verify the product loop live
 
