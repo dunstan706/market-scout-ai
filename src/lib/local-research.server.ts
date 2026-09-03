@@ -597,7 +597,15 @@ export async function collectLocalResearch(input: {
     if (googleReached) {
       sources.push({ label: "Google Places", url: "https://maps.google.com/", kind: "reviews" });
     } else {
-      warnings.push("Google Places could not be reached for this request.");
+      const reason = googleResult.status === "rejected" && googleResult.reason instanceof Error ? googleResult.reason.message : "";
+      console.error("google places failed", reason);
+      if (/403|PERMISSION_DENIED|API_KEY_SERVICE_BLOCKED|REQUEST_DENIED/i.test(reason)) {
+        warnings.push(
+          "Google Places rejected the API key: enable \"Places API (New)\" for the key's project and allow it in the key's API restrictions.",
+        );
+      } else {
+        warnings.push(`Google Places could not be reached for this request${reason ? ` (${reason})` : ""}.`);
+      }
     }
   } else {
     warnings.push("Google Places is not connected, so coverage in lesser-known areas may be limited.");
