@@ -149,7 +149,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     },
     signal: AbortSignal.timeout(9000),
   });
-  if (!response.ok) throw new Error(`Research source returned ${response.status}`);
+  if (!response.ok) {
+    let reason = "";
+    try {
+      const body = (await response.json()) as { error?: { message?: string; status?: string; details?: Array<{ reason?: string }> } };
+      reason = body.error?.details?.[0]?.reason ?? body.error?.status ?? body.error?.message ?? "";
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(`Research source returned ${response.status}${reason ? ` (${reason})` : ""}`);
+  }
   return (await response.json()) as T;
 }
 
