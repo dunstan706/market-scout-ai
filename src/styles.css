@@ -76,9 +76,14 @@
   --animate-ls-from-right: ls-from-right 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-ls-from-left: ls-from-left 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
 
+  /* The `to` frame must NOT keep a transform: with fill-mode `both` a lingering
+     transform (even translateY(0)) turns this wrapper into the containing block
+     for every position:fixed descendant (the floating nav, the constellation
+     canvas), making them stick to the page instead of the viewport. Opacity-only
+     end keeps the same entrance while transform returns to `none`. */
   @keyframes ls-rise {
     from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; }
   }
   @keyframes ls-fade {
     from { opacity: 0; }
@@ -208,19 +213,101 @@
    ~160px before the element enters so fast scrollers still catch it. */
 @supports (animation-timeline: view()) {
   .ls-scroll-reveal {
-    animation: ls-scroll-reveal linear both;
+    animation: ls-scroll-reveal ease-out both;
     animation-timeline: view();
-    animation-range: entry -160px entry 100%;
+    animation-range-start: entry -220px;
+    animation-range-end: entry 100%;
   }
 
   @keyframes ls-scroll-reveal {
     from {
       opacity: 0;
-      transform: translateY(28px);
+      transform: translateY(40px);
+    }
+    60% {
+      opacity: 1;
     }
     to {
       opacity: 1;
       transform: translateY(0);
     }
   }
+}
+
+/* Landing page — dark “constellation” theme.
+   Applied to the landing route's <main> only; every token below is redefined
+   so the light editorial palette (paper bg / ink text) flips to ink bg / paper
+   text for descendants, while the dashboard and auth pages keep :root values.
+   Both the raw tokens and the --color-* aliases are overridden because compiled
+   utilities reference the aliases while a few custom properties reference the
+   raw values directly. */
+.landing-dark {
+  --paper: oklch(0.955 0.017 85);
+  --paper-deep: oklch(0.26 0.01 45);
+  --ink: oklch(0.955 0.017 85 / 0.85);
+  --ink-soft: oklch(0.74 0.02 70);
+  --rule: oklch(0.955 0.017 85 / 0.14);
+  --background: rgb(28 23 21);
+  --foreground: oklch(0.955 0.017 85);
+  --card: oklch(0.255 0.012 45);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.255 0.012 45);
+  --popover-foreground: var(--foreground);
+  --primary: var(--paper);
+  --primary-foreground: rgb(28 23 21);
+  --secondary: oklch(0.27 0.012 45);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.27 0.012 45);
+  --muted-foreground: oklch(0.74 0.02 70);
+  --accent: oklch(0.74 0.155 62);
+  --accent-foreground: rgb(28 23 21);
+  --destructive: oklch(0.68 0.19 25);
+  --destructive-foreground: var(--foreground);
+  --border: var(--rule);
+  --input: oklch(0.5 0.02 60 / 0.35);
+  --ring: oklch(0.74 0.155 62);
+  --ring-offset-background: var(--background);
+  --signal-red: oklch(0.68 0.19 25);
+  --signal-amber: oklch(0.78 0.15 65);
+  --signal-green: oklch(0.72 0.15 150);
+  --signal-red-soft: oklch(0.68 0.19 25 / 0.14);
+  --signal-amber-soft: oklch(0.78 0.15 65 / 0.14);
+  --signal-green-soft: oklch(0.72 0.15 150 / 0.14);
+  --shadow-paper: 0 1px 0 oklch(0.955 0.017 85 / 0.06), 0 12px 32px -16px rgb(0 0 0 / 0.65);
+  --shadow-lift: 0 24px 60px -24px rgb(0 0 0 / 0.75);
+
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--ring-offset-background);
+  --color-signal-red: var(--signal-red);
+  --color-signal-amber: var(--signal-amber);
+  --color-signal-green: var(--signal-green);
+  --color-signal-red-soft: var(--signal-red-soft);
+  --color-signal-amber-soft: var(--signal-amber-soft);
+  --color-signal-green-soft: var(--signal-green-soft);
+
+  background-color: var(--background);
+  color: var(--foreground);
 }

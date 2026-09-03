@@ -3,7 +3,11 @@ import { WaitlistForm } from "@/components/WaitlistForm";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
 import { AuthNavLink } from "@/components/AuthNavLink";
+import { ConstellationGrid } from "@/components/ConstellationGrid";
+import { AnimatedNavFramer } from "@/components/ui/animated-nav-framer";
 import { Reveal } from "@/components/Reveal";
+import { useSmoothedScroll } from "@/lib/use-smoothed-scroll";
+import { useGridCols } from "@/lib/use-grid-cols";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -93,32 +97,32 @@ const PLANS = [
 ];
 
 function Index() {
+  useSmoothedScroll();
+  const monitors = useGridCols<HTMLDListElement>();
+  const steps = useGridCols<HTMLOListElement>();
+  const pricing = useGridCols<HTMLDivElement>();
   return (
-    <main className="min-h-screen">
-      {/* Masthead */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <a href="#" className="font-serif text-2xl tracking-tight">
-          Localscope<span className="text-accent">.</span>
-        </a>
-        <nav className="hidden items-center gap-8 text-sm text-muted-foreground sm:flex">
-          <a href="#brief" className="hover:text-foreground">Sample brief</a>
-          <a href="#how" className="hover:text-foreground">How it works</a>
-          <a href="#pricing" className="hover:text-foreground">Pricing</a>
-          <a href="#try" className="hover:text-foreground">Try it</a>
-        </nav>
-        <div className="flex items-center gap-5">
-          <AuthNavLink />
-          <a
-            href="#waitlist"
-            className="rounded-sm border border-ink px-4 py-2 text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground"
-          >
-            Get early access
+    <main id="top" className="landing-dark relative min-h-screen">
+      <ConstellationGrid className="fixed inset-0 h-screen w-full" />
+      <AnimatedNavFramer
+        logo={
+          <a href="#top" className="whitespace-nowrap font-serif text-xl tracking-tight sm:text-2xl">
+            Localscope<span className="text-accent">.</span>
           </a>
-        </div>
-      </header>
+        }
+        items={[
+          { name: "Sample brief", href: "#brief" },
+          { name: "How it works", href: "#how" },
+          { name: "Pricing", href: "#pricing" },
+          { name: "Try it", href: "#try" },
+        ]}
+        auth={<AuthNavLink />}
+        cta={{ href: "#waitlist", label: "Get early access", shortLabel: "Join" }}
+      />
+      <div className="relative">
 
-      {/* Hero */}
-      <section className="mx-auto max-w-6xl px-6 pb-20 pt-10 md:pt-20">
+      {/* Hero — clears the floating pill nav above */}
+      <section className="mx-auto max-w-6xl px-6 pb-20 pt-28 md:pt-32">
         <div className="rule-double pt-6">
           <p className="eyebrow animate-fade">For salon & spa owners · Anywhere in the world</p>
           <h1 className="mt-6 max-w-4xl text-5xl leading-[1.02] md:text-7xl animate-rise">
@@ -137,7 +141,7 @@ function Index() {
       {/* Sample brief */}
       <section id="brief" className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:items-start">
-          <Reveal className="lg:sticky lg:top-10">
+          <Reveal className="lg:sticky lg:top-10" scrollLinked={false}>
             <p className="eyebrow">What you get</p>
             <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Not a dashboard. A brief.</h2>
             <p className="mt-5 text-muted-foreground leading-relaxed">
@@ -176,9 +180,15 @@ function Index() {
           <p className="eyebrow">What we monitor</p>
           <h2 className="mt-4 max-w-2xl text-4xl leading-tight md:text-5xl">Everything happening within walking distance of your door.</h2>
         </Reveal>
-        <dl className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+        <dl ref={monitors.ref} className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
           {MONITORS.map(([title, desc], i) => (
-            <Reveal key={title} delayMs={i * 60} className="border-t border-rule pt-4">
+            <Reveal
+              key={title}
+              delayMs={i * 60}
+              seqIndex={i % (monitors.cols ?? 1)}
+              seqPx={40}
+              className="border-t border-rule pt-4"
+            >
               <dt className="flex items-baseline gap-3 font-serif text-xl">
                 <span className="text-sm text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
                 {title}
@@ -196,10 +206,10 @@ function Index() {
             <p className="eyebrow">How it works</p>
             <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Set up once. Read every Monday.</h2>
           </Reveal>
-          <ol className="mt-12 grid gap-10 md:grid-cols-3">
+          <ol ref={steps.ref} className="mt-12 grid gap-10 md:grid-cols-3">
             {STEPS.map(([title, desc], i) => (
               <li key={title}>
-                <Reveal delayMs={i * 100} className="h-full">
+                <Reveal delayMs={i * 100} seqIndex={i % (steps.cols ?? 1)} seqPx={100} className="h-full">
                 <span className="font-serif text-6xl text-accent">{i + 1}</span>
                 <h3 className="mt-3 font-serif text-2xl">{title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{desc}</p>
@@ -217,9 +227,9 @@ function Index() {
           <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Less than one lost regular customer.</h2>
           <p className="mt-4 max-w-xl text-muted-foreground">Per month, per location. Early-access members lock in launch pricing for 12 months.</p>
         </Reveal>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div ref={pricing.ref} className="mt-12 grid gap-6 md:grid-cols-3">
           {PLANS.map((p, i) => (
-            <Reveal key={p.name} delayMs={i * 90} className="h-full">
+            <Reveal key={p.name} delayMs={i * 90} seqIndex={i % (pricing.cols ?? 1)} seqPx={100} className="h-full">
             <div
               className={`paper-card flex h-full flex-col rounded-md p-7 ${p.featured ? "border-ink shadow-lift md:-translate-y-3" : ""}`}
             >
@@ -300,6 +310,7 @@ function Index() {
           <p>Starting with salons & spas. More verticals soon.</p>
         </div>
       </footer>
+      </div>
     </main>
   );
 }
