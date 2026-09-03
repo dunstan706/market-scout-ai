@@ -3,6 +3,7 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  useLocation,
   useRouter,
   HeadContent,
   Scripts,
@@ -118,11 +119,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const location = useLocation();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes.
+          Keying on the pathname re-triggers a short entrance fade on every route change;
+          in-app switches (dashboard tabs/screens) animate on their own. */}
+      <div key={location.pathname} className="animate-ls-rise">
+        <Outlet />
+      </div>
     </QueryClientProvider>
   );
 }

@@ -86,6 +86,7 @@ function DashboardPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>("business");
   const [tab, setTab] = useState<BusinessTab>("monitoring");
+  const [tabDir, setTabDir] = useState<"left" | "right" | null>(null);
   const [draft, setDraft] = useState<Profile>({ businessName: "", businessType: "salon", location: "" });
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
@@ -175,6 +176,17 @@ function DashboardPage() {
     "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-sm px-3.5 py-2.5 text-sm font-medium transition-colors " +
     (active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground");
 
+  // Tab switches slide in the direction you moved (spatial memory); every
+  // other way of landing on a tab (business switch, first load) fades instead.
+  function goTab(next: BusinessTab) {
+    if (next === tab) return;
+    const order: BusinessTab[] = ["details", "monitoring", "scan"];
+    const from = order.indexOf(tab);
+    const to = order.indexOf(next);
+    setTabDir(to > from ? "right" : "left");
+    setTab(next);
+  }
+
   function selectBusiness(business: Business) {
     setActiveId(business.id);
     setDraft({
@@ -184,6 +196,7 @@ function DashboardPage() {
     });
     setScreen("business");
     setTab("monitoring");
+    setTabDir(null);
     setSavedFlash(false);
     setSavedError("");
   }
@@ -396,7 +409,7 @@ function DashboardPage() {
 
         <main className="mt-8 min-w-0 flex-1 lg:mt-0">
           {screen === "add" && (
-            <section className="space-y-8" aria-label="Add a business">
+            <section className="space-y-8 animate-ls-fade" aria-label="Add a business">
               <header>
                 <p className="eyebrow">Getting started</p>
                 <h1 className="mt-2 font-serif text-3xl md:text-4xl">Add your first business</h1>
@@ -460,7 +473,7 @@ function DashboardPage() {
           )}
 
           {screen === "plans" && (
-            <section className="space-y-8" aria-label="Plans">
+            <section className="space-y-8 animate-ls-fade" aria-label="Plans">
               <header>
                 <p className="eyebrow">Plans</p>
                 <h1 className="mt-2 font-serif text-3xl md:text-4xl">More businesses are coming</h1>
@@ -501,7 +514,7 @@ function DashboardPage() {
           )}
 
           {screen === "business" && activeBusiness && (
-            <div className="space-y-8">
+            <div key={activeBusiness.id} className="space-y-8 animate-ls-fade">
               <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                   <p className="eyebrow">Business</p>
@@ -515,7 +528,7 @@ function DashboardPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setTab("scan")}
+                  onClick={() => goTab("scan")}
                   className="shrink-0 rounded-sm bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent"
                 >
                   Run scan now
@@ -530,7 +543,7 @@ function DashboardPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setTab(item.id)}
+                        onClick={() => goTab(item.id)}
                         aria-current={active ? "page" : undefined}
                         className={
                           "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 pb-3 pt-2 text-sm font-medium transition-colors " +
@@ -551,6 +564,16 @@ function DashboardPage() {
                 </nav>
               </div>
 
+              <div
+                key={tab + "-" + (tabDir ?? "none")}
+                className={
+                  tabDir === "right"
+                    ? "animate-ls-from-right"
+                    : tabDir === "left"
+                      ? "animate-ls-from-left"
+                      : ""
+                }
+              >
               {tab === "details" && (
                 <form
                   onSubmit={onSaveDetails}
@@ -624,7 +647,7 @@ function DashboardPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setTab("scan")}
+                        onClick={() => goTab("scan")}
                         className="shrink-0 rounded-sm bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent"
                       >
                         Run your first scan
@@ -737,6 +760,7 @@ function DashboardPage() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           )}
         </main>
