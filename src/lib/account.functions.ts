@@ -95,6 +95,37 @@ export const getMyProfile = createServerFn({ method: "POST" })
     return { profile: toProfile(data) };
   });
 
+// Probes whether the tables the dashboard writes to exist (they're created by
+// the setup migrations, not by the app). Runs through the user's scoped client
+// so it mirrors exactly what saveProfile / generateMonitoringBrief will hit.
+// A missing table is reported up front so the dashboard can show a setup
+// screen instead of letting every action fail with a generic error.
+export const getSchemaStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async ({
+      context,
+    }): Promise<{ ok: boolean; missingTables: Array<"profiles" | "monitoring_snapshots"> }> => {
+      const probe = async (table: "profiles" | "monitoring_snapshots") => {
+        const { error } = await context.supabase.from(table).select("id").limit(1);
+        if (!error) return true;
+        // PGRST205 = "Could not find the table '...' in the schema cache"
+        // (PostgREST's missing-table error). Any other failure (network
+        // hiccup, RLS) leaves the dashboard running — those errors surface
+        // where they actually happen.
+        return !(error.code === "PGRST205" || /could not find the table/i.test(error.message));
+      };
+      const [profiles, monitoringSnapshots] = await Promise.all([
+        probe("profiles"),
+        probe("monitoring_snapshots"),
+      ]);
+      const missingTables: Array<"profiles" | "monitoring_snapshots"> = [];
+      if (!profiles) missingTables.push("profiles");
+      if (!monitoringSnapshots) missingTables.push("monitoring_snapshots");
+      return { ok: missingTables.length === 0, missingTables };
+    },
+  );
+
 export const saveProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ProfileInput.parse(input))
