@@ -337,15 +337,24 @@ async function queryOverpass(
 ${filters.map((filter) => `  ${around}${filter};`).join("\n")}
 );
 out center tags;`;
-  const response = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain", Accept: "application/json", "User-Agent": USER_AGENT },
-    body: query,
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) throw new Error(`OpenStreetMap returned ${response.status}`);
-  const payload = (await response.json()) as { elements?: OverpassElement[] };
-  return payload.elements ?? [];
+  let lastError: unknown;
+  for (const endpoint of OVERPASS_URLS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Accept: "application/json", "User-Agent": USER_AGENT },
+        body: query,
+        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`OpenStreetMap returned ${response.status}`);
+      const payload = (await response.json()) as { elements?: OverpassElement[] };
+      return payload.elements ?? [];
+    } catch (error) {
+      lastError = error;
+      console.warn(`overpass mirror failed: ${endpoint}`, error instanceof Error ? error.message : error);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("OpenStreetMap could not be reached");
 }
 
 function mapOpenStreetMapCompetitors(
