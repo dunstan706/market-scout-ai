@@ -14,13 +14,14 @@ import {
 function competitor(
   partial: Partial<ResearchCompetitor> & { name: string; distanceMeters: number },
 ): ResearchCompetitor {
+  const { name, distanceMeters, ...rest } = partial;
   return {
-    name: partial.name,
-    distanceMeters: partial.distanceMeters,
+    name,
+    distanceMeters,
     priceSamples: [],
     sourceUrl: "https://example.com",
     sourceLabel: "Test",
-    ...partial,
+    ...rest,
   };
 }
 

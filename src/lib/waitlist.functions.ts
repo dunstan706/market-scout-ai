@@ -11,7 +11,7 @@ const WaitlistInput = z.object({
 export type WaitlistInput = z.infer<typeof WaitlistInput>;
 
 export const joinWaitlist = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => WaitlistInput.parse(input))
+  .validator((input: unknown) => WaitlistInput.parse(input))
   .handler(async ({ data }) => {
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

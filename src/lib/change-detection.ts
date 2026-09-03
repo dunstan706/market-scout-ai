@@ -129,12 +129,20 @@ const CURRENCY_SYMBOLS: Record<string, string> = { $: "USD", "£": "GBP", "€":
 export function parsePrice(value: string): { amount: number; currency: string } | null {
   const trimmed = value.replace(/\s+/g, " ").trim();
   if (!trimmed) return null;
-  const match = /^(?:([$£€₹])\s?|(USD|GBP|EUR|INR)\s?)(\d{1,4}(?:[.,]\d{1,2})?)$/i.exec(trimmed);
+  const match = /^(?:([$£€₹])\s?|(USD|GBP|EUR|INR)\s?)(\d{1,4}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)$/i.exec(trimmed);
   if (!match) return null;
   const symbol = match[1];
   const code = (symbol ? CURRENCY_SYMBOLS[symbol] : match[2]) as string | undefined;
   if (!code) return null;
-  const amount = Number((match[3] ?? "").replace(/,/g, ""));
+  const raw = match[3] ?? "";
+  // A trailing comma followed by 1-2 digits with no other separator is a
+  // European decimal comma ("€9,50"); otherwise commas are thousands separators.
+  const lastComma = raw.lastIndexOf(",");
+  const hasEarlierSeparator = lastComma !== -1 && /[.,]/.test(raw.slice(0, lastComma));
+  const amount =
+    lastComma !== -1 && !hasEarlierSeparator && /^\d{1,2}$/.test(raw.slice(lastComma + 1))
+      ? Number(raw.replace(",", "."))
+      : Number(raw.replace(/,/g, ""));
   if (!Number.isFinite(amount)) return null;
   return { amount, currency: code.toUpperCase() };
 }

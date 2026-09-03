@@ -97,7 +97,7 @@ export const getMyProfile = createServerFn({ method: "POST" })
 
 export const saveProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ProfileInput.parse(input))
+  .validator((input: unknown) => ProfileInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
     const { error } = await context.supabase.from("profiles").upsert(
       {

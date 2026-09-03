@@ -40,7 +40,7 @@ function formatRetry(seconds: number): string {
 }
 
 export const generateSampleBrief = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => BriefInput.parse(input))
+  .validator((input: unknown) => BriefInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; brief: Brief } | { ok: false; error: string }> => {
     // Honeypot: real users never see the hidden "website" field.
     if (data.website) {

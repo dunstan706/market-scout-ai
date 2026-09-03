@@ -703,7 +703,7 @@ export function buildEvidenceBrief(input: {
   const priced = research.competitors.find((competitor) => competitor.priceSamples.length || competitor.priceLevel);
   const reviewed = research.competitors.find((competitor) => competitor.rating || competitor.reviewCount || competitor.reviewQuote);
   const newBusiness = research.competitors.find((competitor) => competitor.openingDate);
-  const locationName = research.location.displayName.split(",").slice(0, 2).join(", ");
+  const locationName = research.location.displayName.split(",").slice(0, 2).map((part) => part.trim()).join(", ");
   return {
     title: `${input.businessName}, ${locationName}`,
     signals: [
