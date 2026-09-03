@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
+import { AuthNavLink } from "@/components/AuthNavLink";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -104,12 +105,15 @@ function Index() {
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
           <a href="#try" className="hover:text-foreground">Try it</a>
         </nav>
-        <a
-          href="#waitlist"
-          className="rounded-sm border border-ink px-4 py-2 text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground"
-        >
-          Get early access
-        </a>
+        <div className="flex items-center gap-5">
+          <AuthNavLink />
+          <a
+            href="#waitlist"
+            className="rounded-sm border border-ink px-4 py-2 text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground"
+          >
+            Get early access
+          </a>
+        </div>
       </header>
 
       {/* Hero */}

@@ -44,6 +44,96 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          id: string
+          business_name: string | null
+          business_type: string
+          location: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          business_name?: string | null
+          business_type?: string
+          location?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_name?: string | null
+          business_type?: string
+          location?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      briefs: {
+        Row: {
+          id: string
+          user_id: string
+          business_name: string
+          business_type: string
+          location: string
+          brief: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          business_name: string
+          business_type?: string
+          location: string
+          brief: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          business_name?: string
+          business_type?: string
+          location?: string
+          brief?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      monitoring_snapshots: {
+        Row: {
+          id: string
+          user_id: string
+          business_name: string
+          business_type: string
+          location: string
+          snapshot: Json
+          detected_changes: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          business_name: string
+          business_type?: string
+          location: string
+          snapshot: Json
+          detected_changes?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          business_name?: string
+          business_type?: string
+          location?: string
+          snapshot?: Json
+          detected_changes?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

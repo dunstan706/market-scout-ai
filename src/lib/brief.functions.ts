@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { buildEvidenceBrief, collectLocalResearch, researchForPrompt, type ResearchSource } from "@/lib/local-research.server";
-import { BriefInput, BriefSchema, normalizeLooseBrief, type GeneratedBrief } from "@/lib/brief-core";
+import { collectLocalResearch, type ResearchSource } from "@/lib/local-research.server";
+import { BriefInput, type GeneratedBrief } from "@/lib/brief-core";
 import { checkRateLimit, clientIpFromRequest } from "@/lib/rate-limit.server";
+import { describeBriefError, writeBrief } from "@/lib/brief-writer.server";
 
 export type Brief = GeneratedBrief & {
   sources: ResearchSource[];
@@ -70,65 +71,16 @@ export const generateSampleBrief = createServerFn({ method: "POST" })
       };
     }
 
-    const evidenceBrief = buildEvidenceBrief(data, research);
-    const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) {
+    // The public demo has no history, so it is a one-shot snapshot brief.
+    // Authenticated users get change-aware briefs via generateMonitoringBrief.
+    try {
+      const generated = await writeBrief({ input: data, research });
       return {
         ok: true,
-        brief: { ...evidenceBrief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt },
+        brief: { ...generated, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt },
       };
-    }
-
-    const [{ streamText, Output, NoObjectGeneratedError }, { createLovableAiGatewayProvider }] = await Promise.all([
-      import("ai"),
-      import("@/lib/ai-gateway.server"),
-    ]);
-
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway("google/gemini-3.7-flash");
-
-    const prompt = `You are Localscope, an AI local-market analyst for small businesses.
-Write an illustrative Weekly Market Brief for this business:
-- Name: ${data.businessName}
-- Type: ${data.businessType}
-- Location: ${data.location}
-
-Use only the supplied research evidence. Do not use prior knowledge, web knowledge, plausible examples, or invented numbers. Never claim a price change, new opening, review trend, or competitor action unless the evidence explicitly contains it. If a category has no evidence, say that it is unavailable instead of guessing.
-Return exactly 3 evidence-backed signals: one red (important market fact), one amber (pricing or availability fact), and one green (review or strength fact). Each signal has a short label (2-3 words), a headline under 80 characters, and a detail under 160 characters. Include the source name in the detail when possible.
-Then one recommendation (under 220 characters) and a one-sentence "why". Title should be "<business name>, <neighbourhood or city>". Plain text only, no markdown.
-
-Live research snapshot:
-${researchForPrompt(research)}
-
-Respond with JSON using EXACTLY these keys:
-{"title": string, "signals": [{"tone": "red"|"amber"|"green", "label": string, "headline": string, "detail": string}], "recommendation": string, "why": string}`;
-
-    try {
-      const result = streamText({
-        model,
-        prompt,
-        output: Output.object({ schema: BriefSchema }),
-      });
-      const output = await result.output;
-      const brief = normalizeLooseBrief(output);
-      if (!brief) console.error("brief: normalize failed", JSON.stringify(output));
-      if (!brief) return { ok: false, error: "We couldn't assemble a brief just now. Please try again." };
-      return { ok: true, brief: { ...brief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt } };
     } catch (error) {
-      if (NoObjectGeneratedError.isInstance(error)) {
-        try {
-          const brief = normalizeLooseBrief(JSON.parse(error.text ?? ""));
-          if (brief) return { ok: true, brief: { ...brief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt } };
-        } catch {
-          /* fall through */
-        }
-        console.error("brief: no object generated", error.text);
-        return { ok: false, error: "We couldn't assemble a brief just now. Please try again." };
-      }
-      const status = (error as { statusCode?: number })?.statusCode;
-      console.error("brief generation failed", error);
-      if (status === 429) return { ok: false, error: "We're generating a lot of briefs right now — try again in a minute." };
-      if (status === 402) return { ok: false, error: "The brief generator is temporarily paused. Please join the waitlist and we'll send yours by email." };
-      return { ok: false, error: "Something went wrong generating your brief. Please try again." };
+      console.error("generateSampleBrief failed", error);
+      return { ok: false, error: describeBriefError(error) };
     }
-  });
+  });
