@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
@@ -18,6 +18,8 @@ export const Route = createFileRoute("/")({
         content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners.",
       },
       { property: "og:type", content: "website" },
+      // TODO: swap to an absolute URL (https://your-domain/og.png) once the production domain is known.
+      { property: "og:image", content: "/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
@@ -268,9 +270,17 @@ function Index() {
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-rule px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:justify-between">
+      <footer className="mx-auto flex max-w-6xl flex-col gap-3 border-t border-rule px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>© 2026 Localscope. AI market research for local businesses.</p>
-        <p>Starting with salons & spas. More verticals soon.</p>
+        <div className="flex items-center gap-5">
+          <Link to="/privacy" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+            Privacy
+          </Link>
+          <Link to="/terms" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+            Terms
+          </Link>
+          <p>Starting with salons & spas. More verticals soon.</p>
+        </div>
       </footer>
     </main>
   );

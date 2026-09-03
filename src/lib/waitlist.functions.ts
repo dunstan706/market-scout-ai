@@ -13,21 +13,29 @@ export type WaitlistInput = z.infer<typeof WaitlistInput>;
 export const joinWaitlist = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => WaitlistInput.parse(input))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { error } = await supabaseAdmin.from("waitlist_signups").insert({
-      email: data.email.toLowerCase(),
-      business_name: data.businessName || null,
-      city: data.city || null,
-      business_type: data.businessType,
-    });
+      const { error } = await supabaseAdmin.from("waitlist_signups").insert({
+        email: data.email.toLowerCase(),
+        business_name: data.businessName || null,
+        city: data.city || null,
+        business_type: data.businessType,
+      });
 
-    if (error) {
-      // 23505 = unique violation — already on the list, treat as success
-      if (error.code === "23505") return { ok: true as const, duplicate: true as const };
+      if (error) {
+        // 23505 = unique violation — already on the list, treat as success
+        if (error.code === "23505") return { ok: true as const, duplicate: true as const };
+        console.error("waitlist insert failed", error);
+        throw new Error("Could not save your spot. Please try again.");
+      }
+
+      return { ok: true as const, duplicate: false as const };
+    } catch (error) {
+      // Covers missing Supabase credentials (e.g. local dev without .env) as
+      // well as network or insert failures. Log the real reason server-side,
+      // show the visitor a safe message instead of the raw error text.
       console.error("waitlist insert failed", error);
-      throw new Error("Could not save your spot. Please try again.");
+      throw new Error("Could not save your spot right now. Please try again shortly.");
     }
-
-    return { ok: true as const, duplicate: false as const };
   });

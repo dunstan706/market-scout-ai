@@ -25,6 +25,8 @@ export function SampleBriefGenerator() {
           businessName: String(fd.get("businessName") ?? ""),
           location: String(fd.get("location") ?? ""),
           businessType: (fd.get("businessType") as "salon" | "spa" | "other") ?? "salon",
+          // Honeypot — invisible to humans; bots that fill it are ignored server-side.
+          website: String(fd.get("website") ?? ""),
         },
       });
       if (res.ok) {
@@ -57,6 +59,11 @@ export function SampleBriefGenerator() {
             <option value="spa">Spa</option>
             <option value="other">Other</option>
           </select>
+          {/* Honeypot — visually hidden, never meant to be filled. See brief.functions.ts. */}
+          <div className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+            <label htmlFor="website-field">Leave this field empty</label>
+            <input id="website-field" name="website" type="text" tabIndex={-1} autoComplete="off" />
+          </div>
           <button
             type="submit"
             disabled={status === "loading"}

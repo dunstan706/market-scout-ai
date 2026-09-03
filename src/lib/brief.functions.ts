@@ -1,28 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import { buildEvidenceBrief, collectLocalResearch, researchForPrompt, type ResearchSource } from "@/lib/local-research.server";
-
-const BriefInput = z.object({
-  businessName: z.string().trim().min(2).max(120),
-  location: z.string().trim().min(2).max(160),
-  businessType: z.enum(["salon", "spa", "other"]).default("salon"),
-});
-
-export const SignalSchema = z.object({
-  tone: z.enum(["red", "amber", "green"]),
-  label: z.string(),
-  headline: z.string(),
-  detail: z.string(),
-});
-
-export const BriefSchema = z.object({
-  title: z.string(),
-  signals: z.array(SignalSchema),
-  recommendation: z.string(),
-  why: z.string(),
-});
-
-type GeneratedBrief = z.infer<typeof BriefSchema>;
+import { BriefInput, BriefSchema, normalizeLooseBrief, type GeneratedBrief } from "@/lib/brief-core";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/rate-limit.server";
 
 export type Brief = GeneratedBrief & {
   sources: ResearchSource[];
@@ -30,25 +9,56 @@ export type Brief = GeneratedBrief & {
   capturedAt: string;
 };
 
-// Lenient shape for model output — tolerates alternate key names for the signal tone.
-const LooseBrief = z.object({
-  title: z.string(),
-  signals: z.array(
-    z
-      .object({
-        label: z.string(),
-        headline: z.string(),
-        detail: z.string(),
-      })
-      .passthrough(),
-  ),
-  recommendation: z.string(),
-  why: z.string(),
-});
+// A bot that fills the honeypot field gets a fake success with zero research,
+// zero LLM calls — and no indication that it was detected.
+function honeypotBrief(input: { businessName: string; location: string }): Brief {
+  return {
+    title: `${input.businessName}, ${input.location}`,
+    signals: [
+      {
+        tone: "green",
+        label: "On its way",
+        headline: "Your sample brief is being prepared",
+        detail: "We'll email your first brief once your neighbourhood opens.",
+      },
+    ],
+    recommendation: "Join the waitlist to get your first brief free.",
+    why: "We'll watch your local market and send the brief when your city opens.",
+    sources: [],
+    warnings: [],
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function formatRetry(seconds: number): string {
+  if (seconds >= 60) {
+    const minutes = Math.ceil(seconds / 60);
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
 
 export const generateSampleBrief = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => BriefInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; brief: Brief } | { ok: false; error: string }> => {
+    // Honeypot: real users never see the hidden "website" field.
+    if (data.website) {
+      return { ok: true, brief: honeypotBrief(data) };
+    }
+
+    // Per-IP rate limit — the generator spends real money per call (Google
+    // Places, website fetches, an LLM call) and is fully public. Dynamic import
+    // keeps the server-only module out of the client bundle (see client.server.ts).
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const ip = clientIpFromRequest(getRequest()) ?? "unknown";
+    const limit = checkRateLimit(`brief:${ip}`);
+    if (!limit.allowed) {
+      return {
+        ok: false,
+        error: `We're generating a lot of briefs right now — try again in ${formatRetry(limit.retryAfterSeconds)}.`,
+      };
+    }
+
     let research;
     try {
       research = await collectLocalResearch(data);
@@ -93,23 +103,6 @@ ${researchForPrompt(research)}
 Respond with JSON using EXACTLY these keys:
 {"title": string, "signals": [{"tone": "red"|"amber"|"green", "label": string, "headline": string, "detail": string}], "recommendation": string, "why": string}`;
 
-    const normalize = (raw: unknown): GeneratedBrief | null => {
-      const parsed = LooseBrief.safeParse(raw);
-      if (!parsed.success) return null;
-      const signals = parsed.data.signals
-        .map((s) => {
-          const tone = Object.values(s).find(
-            (v): v is Brief["signals"][number]["tone"] =>
-              typeof v === "string" && ["red", "amber", "green"].includes(v.toLowerCase()),
-          );
-          return { tone: tone?.toLowerCase() as Brief["signals"][number]["tone"], label: s.label, headline: s.headline, detail: s.detail };
-        })
-        .filter((s) => !!s.tone)
-        .slice(0, 3);
-      if (signals.length === 0) return null;
-      return { title: parsed.data.title, signals, recommendation: parsed.data.recommendation, why: parsed.data.why };
-    };
-
     try {
       const result = streamText({
         model,
@@ -117,14 +110,14 @@ Respond with JSON using EXACTLY these keys:
         output: Output.object({ schema: BriefSchema }),
       });
       const output = await result.output;
-      const brief = normalize(output);
+      const brief = normalizeLooseBrief(output);
       if (!brief) console.error("brief: normalize failed", JSON.stringify(output));
       if (!brief) return { ok: false, error: "We couldn't assemble a brief just now. Please try again." };
       return { ok: true, brief: { ...brief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt } };
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error)) {
         try {
-          const brief = normalize(JSON.parse(error.text ?? ""));
+          const brief = normalizeLooseBrief(JSON.parse(error.text ?? ""));
           if (brief) return { ok: true, brief: { ...brief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt } };
         } catch {
           /* fall through */
@@ -138,4 +131,4 @@ Respond with JSON using EXACTLY these keys:
       if (status === 402) return { ok: false, error: "The brief generator is temporarily paused. Please join the waitlist and we'll send yours by email." };
       return { ok: false, error: "Something went wrong generating your brief. Please try again." };
     }
-  });
+  });

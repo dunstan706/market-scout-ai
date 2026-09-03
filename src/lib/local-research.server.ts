@@ -1,3 +1,5 @@
+import { cacheGet, cacheSet } from "@/lib/cache.server";
+
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const OVERPASS_URLS = [
   "https://overpass-api.de/api/interpreter",
@@ -12,6 +14,8 @@ const NEARBY_RADIUS_METERS = 5_000;
 const WIDE_RADIUS_METERS = 15_000;
 const THIN_COVERAGE_COUNT = 3;
 const SAME_PLACE_METERS = 150;
+const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // a place's coordinates rarely move
+const PLACES_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // competitor data goes stale faster
 
 export type ResearchSource = {
   label: string;
@@ -110,7 +114,7 @@ function googleApiKey(): string | undefined {
   return process.env["GOOGLE_PLACES_API_KEY"] || process.env["GOOGLE_MAPS_API_KEY"];
 }
 
-function normalizeName(value: string): string {
+export function normalizeName(value: string): string {
   return value
     .toLocaleLowerCase()
     .replace(/&/g, " and ")
@@ -120,7 +124,7 @@ function normalizeName(value: string): string {
     .trim();
 }
 
-function namesLikelyMatch(a: string, b: string): boolean {
+export function namesLikelyMatch(a: string, b: string): boolean {
   const left = normalizeName(a);
   const right = normalizeName(b);
   if (!left || !right) return false;
@@ -173,7 +177,7 @@ function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number
   return Math.round(earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-function formatDistance(meters: number): string {
+export function formatDistance(meters: number): string {
   return meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`;
 }
 
@@ -201,7 +205,7 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-function readJsonLdEvidence(html: string): WebsiteEvidence {
+export function readJsonLdEvidence(html: string): WebsiteEvidence {
   const evidence: WebsiteEvidence = { prices: [] };
   const scripts = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
 
@@ -299,12 +303,16 @@ async function geocodeGoogle(location: string): Promise<{ displayName: string; l
 }
 
 async function geocode(location: string): Promise<{ displayName: string; latitude: number; longitude: number }> {
+  const cacheKey = `geocode:${location.trim().toLocaleLowerCase()}`;
+  const cached = cacheGet<{ displayName: string; latitude: number; longitude: number }>(cacheKey);
+  if (cached) return cached;
   try {
-    return await geocodeNominatim(location);
+    const result = await geocodeNominatim(location);
+    return cacheSet(cacheKey, result, GEOCODE_CACHE_TTL_MS);
   } catch (error) {
     try {
       const googleMatch = await geocodeGoogle(location);
-      if (googleMatch) return googleMatch;
+      if (googleMatch) return cacheSet(cacheKey, googleMatch, GEOCODE_CACHE_TTL_MS);
     } catch {
       // Fall through to the original Nominatim error.
     }
@@ -448,6 +456,11 @@ async function fetchGoogleCompetitors(
 ): Promise<ResearchCompetitor[]> {
   const apiKey = googleApiKey();
   if (!apiKey) return [];
+  // Cache by place + query, not by user-typed text, so repeat lookups of the
+  // same area (or abuse of the public form) don't re-bill Google each time.
+  const cacheKey = `places:${businessType}|${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}|${radiusMeters}`;
+  const cached = cacheGet<ResearchCompetitor[]>(cacheKey);
+  if (cached) return cached;
   const ownName = businessName.toLocaleLowerCase().trim();
   const response = await fetchJson<GoogleSearchResponse>(GOOGLE_PLACES_URL, {
     method: "POST",
@@ -469,7 +482,7 @@ async function fetchGoogleCompetitors(
       },
     }),
   });
-  return (response.places ?? []).flatMap((place) => {
+  const competitors = (response.places ?? []).flatMap((place) => {
     const name = text(place.displayName?.text);
     const latitude = number(place.location?.latitude);
     const longitude = number(place.location?.longitude);
@@ -498,9 +511,10 @@ async function fetchGoogleCompetitors(
       } satisfies ResearchCompetitor,
     ];
   });
+  return cacheSet(cacheKey, competitors, PLACES_CACHE_TTL_MS);
 }
 
-function isSameCompetitor(a: ResearchCompetitor, b: ResearchCompetitor): boolean {
+export function isSameCompetitor(a: ResearchCompetitor, b: ResearchCompetitor): boolean {
   if (!namesLikelyMatch(a.name, b.name)) return false;
   if (
     a.latitude !== undefined &&
@@ -532,7 +546,7 @@ function enrichFromSecondary(primary: ResearchCompetitor, secondary: ResearchCom
   };
 }
 
-function mergeCompetitors(google: ResearchCompetitor[], osm: ResearchCompetitor[]): ResearchCompetitor[] {
+export function mergeCompetitors(google: ResearchCompetitor[], osm: ResearchCompetitor[]): ResearchCompetitor[] {
   const result = [...google].sort((a, b) => a.distanceMeters - b.distanceMeters);
   for (const osmPlace of osm.sort((a, b) => a.distanceMeters - b.distanceMeters)) {
     const match = result.find((candidate) => isSameCompetitor(candidate, osmPlace));
