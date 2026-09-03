@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { generateSampleBrief, type Brief } from "@/lib/brief.functions";
 import { BriefCard } from "@/components/BriefCard";
@@ -74,6 +75,13 @@ export function SampleBriefGenerator() {
           {status === "error" && <p className="text-sm text-signal-red">{error}</p>}
           <p className="text-xs text-muted-foreground">
              Every generated claim is grounded in the sources we could reach. Missing sources are called out instead of guessed.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Like this brief?{" "}
+            <Link to="/signup" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+              Create a free account
+            </Link>{" "}
+            to save your business and get weekly scans of what changes nearby.
           </p>
         </form>
       </div>

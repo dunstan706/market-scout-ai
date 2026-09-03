@@ -116,6 +116,66 @@ export const saveProfile = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// When a signed-in user has no profile yet but signed up for the waitlist with
+// the same email, link the waitlist row and prefill their profile from it
+// (business name / type / city) so the dashboard starts populated.
+export const claimWaitlistProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async ({
+      context,
+    }): Promise<{ profile: Profile | null; claimed: boolean }> => {
+      const userId = context.userId;
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      const { data: existing } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+      if (existing) return { profile: toProfile(existing), claimed: false };
+
+      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(userId);
+      const email = authData?.user?.email?.toLowerCase();
+      if (!email) return { profile: null, claimed: false };
+
+      const { data: signup } = await supabaseAdmin
+        .from("waitlist_signups")
+        .select("*")
+        .eq("email", email)
+        .is("user_id", null)
+        .maybeSingle();
+      if (!signup) return { profile: null, claimed: false };
+
+      const { error } = await supabaseAdmin.from("profiles").upsert(
+        {
+          id: userId,
+          business_name: signup.business_name,
+          business_type:
+            signup.business_type === "spa" || signup.business_type === "other"
+              ? signup.business_type
+              : "salon",
+          location: signup.city,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
+      if (error) {
+        console.error("claimWaitlistProfile upsert failed", error);
+        return { profile: null, claimed: false };
+      }
+
+      await supabaseAdmin.from("waitlist_signups").update({ user_id: userId }).eq("id", signup.id);
+
+      const { data: created } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+      return { profile: toProfile(created), claimed: true };
+    },
+  );
+
 // Runs one full monitoring cycle for the signed-in user's profile:
 // 1. fresh research scan, 2. diff vs the latest stored snapshot,
 // 3. store the new snapshot with detected changes, 4. write + store the brief.

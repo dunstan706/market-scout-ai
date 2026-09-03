@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import {
+  claimWaitlistProfile,
   getMyProfile,
   getMonitoringStatus,
   generateMonitoringBrief,
@@ -56,6 +57,7 @@ function DashboardPage() {
   const router = useRouter();
   const getProfile = useServerFn(getMyProfile);
   const persistProfile = useServerFn(saveProfile);
+  const claimProfile = useServerFn(claimWaitlistProfile);
   const runMonitoring = useServerFn(generateMonitoringBrief);
   const fetchBriefs = useServerFn(listBriefs);
   const fetchStatus = useServerFn(getMonitoringStatus);
@@ -92,8 +94,15 @@ function DashboardPage() {
           fetchBriefs(),
           fetchStatus(),
         ]);
+        // No profile yet — if this email is on the waitlist, claim it and
+        // prefill the profile so the dashboard starts populated.
+        let resolvedProfile = saved;
+        if (!resolvedProfile) {
+          const claimed = await claimProfile();
+          if (claimed.profile) resolvedProfile = claimed.profile;
+        }
         if (!active) return;
-        if (saved) setProfile(saved);
+        if (resolvedProfile) setProfile(resolvedProfile);
         setBriefs(stored);
         setStatus(monitoring);
         setView("ready");
@@ -106,7 +115,7 @@ function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [getProfile, fetchBriefs, fetchStatus]);
+  }, [getProfile, fetchBriefs, fetchStatus, claimProfile]);
 
   async function onSaveProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

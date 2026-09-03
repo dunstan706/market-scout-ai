@@ -23,6 +23,7 @@ export type Database = {
           email: string
           id: string
           notes: string | null
+          user_id: string | null
         }
         Insert: {
           business_name?: string | null
@@ -32,6 +33,7 @@ export type Database = {
           email: string
           id?: string
           notes?: string | null
+          user_id?: string | null
         }
         Update: {
           business_name?: string | null
@@ -41,6 +43,7 @@ export type Database = {
           email?: string
           id?: string
           notes?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -79,6 +82,7 @@ export type Database = {
           business_type: string
           location: string
           brief: Json
+          emailed_at: string | null
           created_at: string
         }
         Insert: {
@@ -88,6 +92,7 @@ export type Database = {
           business_type?: string
           location: string
           brief: Json
+          emailed_at?: string | null
           created_at?: string
         }
         Update: {
@@ -97,6 +102,7 @@ export type Database = {
           business_type?: string
           location?: string
           brief?: Json
+          emailed_at?: string | null
           created_at?: string
         }
         Relationships: []
