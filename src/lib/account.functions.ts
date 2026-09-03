@@ -60,6 +60,14 @@ export type MonitoringStatus = {
 
 type ProfileRow = Tables<"profiles">;
 
+// In development, append the underlying Supabase error so setup problems
+// (missing tables from unapplied migrations, RLS mistakes) are visible in the
+// UI instead of hidden behind a generic message. Production stays generic.
+function describeError(message: string, detail: string | undefined): string {
+  if (process.env["NODE_ENV"] === "production" || !detail) return message;
+  return `${message} ${detail}`;
+}
+
 function toProfile(row: ProfileRow | null): Profile | null {
   if (!row) return null;
   const businessType: BusinessType =
@@ -103,7 +111,7 @@ export const saveProfile = createServerFn({ method: "POST" })
     );
     if (error) {
       console.error("saveProfile failed", error);
-      throw new Error("Could not save your profile. Please try again.");
+      throw new Error(describeError("Could not save your profile.", error.message));
     }
     return { ok: true };
   });
@@ -196,7 +204,7 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
       });
       if (briefError) {
         console.error("monitoring brief insert failed", briefError);
-        return { ok: false, error: "Could not save your brief. Please try again." };
+        return { ok: false, error: describeError("Could not save your brief.", briefError.message) };
       }
 
       return {

@@ -64,6 +64,7 @@ function DashboardPage() {
   const [email, setEmail] = useState("");
   const [profile, setProfile] = useState<Profile>({ businessName: "", businessType: "salon", location: "" });
   const [savedFlash, setSavedFlash] = useState(false);
+  const [savedError, setSavedError] = useState("");
 
   const [status, setStatus] = useState<MonitoringStatus>(EMPTY_STATUS);
   const [briefs, setBriefs] = useState<BriefRecord[]>([]);
@@ -110,11 +111,15 @@ function DashboardPage() {
   async function onSaveProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSavedFlash(false);
+    setSavedError("");
     try {
       await persistProfile({ data: profile });
       setSavedFlash(true);
     } catch (err) {
+      const message =
+        err instanceof Error && err.message ? err.message : "Could not save your profile. Please try again.";
       console.error(err);
+      setSavedError(message);
     }
   }
 
@@ -225,6 +230,7 @@ function DashboardPage() {
             Save profile
           </button>
           {savedFlash && <p className="text-sm text-signal-green">Saved.</p>}
+          {savedError && <p className="text-sm text-signal-red">{savedError}</p>}
           <p className="text-xs text-muted-foreground">
             Scans look up competitors, prices, reviews, and hours around this location.
           </p>
