@@ -27,9 +27,11 @@ back up.
       (verified in the agent workspace, Sep 3).
 - [ ] Sign up → save profile → **Run scan now** (first scan sets the baseline)
       → run scan again later → check the "What changed" panel shows real deltas.
-- [ ] Confirm the API keys are set in Lovable Cloud: `SUPABASE_SERVICE_ROLE_KEY`,
-      `GOOGLE_PLACES_API_KEY`, `LOVABLE_API_KEY` (all documented in
-      `.env.example`).
+- [ ] Confirm the API keys are set in Lovable Cloud:
+      `GOOGLE_PLACES_API_KEY` — confirmed (encrypted project secret, Sep 3).
+      `SUPABASE_SERVICE_ROLE_KEY` and `LOVABLE_API_KEY` are reserved prefixes
+      Lovable auto-manages — verify they appear under More → Cloud → Secrets
+      (marked "Lovable").
 - [ ] Test waitlist → account claim: join the waitlist with an email, then sign
       up with that same email — the dashboard profile should auto-prefill.
 - [ ] Trigger the weekly run once manually:
@@ -55,10 +57,10 @@ back up.
 
 ## 4. Housekeeping
 
-- [ ] Untrack `.env` and add it to `.gitignore` (`git rm --cached .env`) so
-      credentials added there can never be committed. It is tracked today from
-      an early commit but holds only publishable Supabase keys — no secrets in
-      history.
+- [ ] Keep `.env` committed — Lovable requires it for build-time `VITE_*`
+      values (gitignoring it breaks previews). Rule going forward: private
+      keys go in Lovable Secrets (More → Cloud → Secrets), never in `.env`.
+      The tracked file holds only publishable Supabase values today.
 
 ## On hold — Resend email delivery (set aside for now)
 
