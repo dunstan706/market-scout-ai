@@ -201,3 +201,26 @@
 .ls-reveal-pending {
   opacity: 0;
 }
+
+/* Scroll-linked reveals (animation-timeline: view()): progress is bound to
+   the element's journey through the viewport, so the motion is visible at any
+   scroll speed and plays in reverse when scrolling back up. The range starts
+   ~160px before the element enters so fast scrollers still catch it. */
+@supports (animation-timeline: view()) {
+  .ls-scroll-reveal {
+    animation: ls-scroll-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry -160px entry 100%;
+  }
+
+  @keyframes ls-scroll-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
