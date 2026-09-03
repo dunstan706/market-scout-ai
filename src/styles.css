@@ -70,20 +70,22 @@
   }
 
   /* Fast, subtle transitions for in-app view changes (dashboard tabs, screen
-     switches, route entrances). Deliberately short and low-travel. */
-  --animate-ls-rise: ls-rise 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+     switches, route entrances). Deliberately short and low-travel.
+
+     IMPORTANT: fill mode must NOT hold the end state. Any retained transform —
+     even the identity matrix — makes this element the containing block for
+     every position:fixed descendant (the floating nav, the constellation
+     canvas), pinning them to the page instead of the viewport. `backwards`
+     plays the entrance identically (there is no delay to hold) and leaves the
+     element at its natural `transform: none` afterwards. */
+  --animate-ls-rise: ls-rise 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   --animate-ls-fade: ls-fade 0.16s ease-out both;
   --animate-ls-from-right: ls-from-right 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-ls-from-left: ls-from-left 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
 
-  /* The `to` frame must NOT keep a transform: with fill-mode `both` a lingering
-     transform (even translateY(0)) turns this wrapper into the containing block
-     for every position:fixed descendant (the floating nav, the constellation
-     canvas), making them stick to the page instead of the viewport. Opacity-only
-     end keeps the same entrance while transform returns to `none`. */
   @keyframes ls-rise {
     from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; }
+    to { opacity: 1; transform: translateY(0); }
   }
   @keyframes ls-fade {
     from { opacity: 0; }

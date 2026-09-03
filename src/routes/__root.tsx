@@ -121,12 +121,28 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const location = useLocation();
 
+  // Clear the entrance animation once it finishes. A retained animation fill
+  // (even an identity transform) would turn this wrapper into the containing
+  // block for every position:fixed descendant (the floating nav, the landing
+  // constellation canvas), pinning them to the page instead of the viewport.
+  // fill-mode:backwards already avoids that in well-behaved browsers; removing
+  // the animation here makes it deterministic everywhere.
+  const clearEntranceAnimation = (e: React.AnimationEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && e.animationName === "ls-rise") {
+      e.currentTarget.style.animation = "none";
+    }
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes.
           Keying on the pathname re-triggers a short entrance fade on every route change;
           in-app switches (dashboard tabs/screens) animate on their own. */}
-      <div key={location.pathname} className="animate-ls-rise">
+      <div
+        key={location.pathname}
+        className="animate-ls-rise"
+        onAnimationEnd={clearEntranceAnimation}
+      >
         <Outlet />
       </div>
     </QueryClientProvider>
