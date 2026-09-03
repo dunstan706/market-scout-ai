@@ -365,7 +365,7 @@ function mapOpenStreetMapCompetitors(
   const normalizedName = businessName.toLocaleLowerCase().trim();
   const seen = new Set<string>();
   return elements
-    .map((element) => {
+    .map((element): ResearchCompetitor | null => {
       const tags = element.tags ?? {};
       const latitude = element.lat ?? element.center?.lat;
       const longitude = element.lon ?? element.center?.lon;
@@ -395,7 +395,7 @@ function mapOpenStreetMapCompetitors(
         priceSamples,
         sourceUrl,
         sourceLabel: "OpenStreetMap",
-      } satisfies ResearchCompetitor;
+      };
     })
     .filter((value): value is ResearchCompetitor => !!value);
 }
