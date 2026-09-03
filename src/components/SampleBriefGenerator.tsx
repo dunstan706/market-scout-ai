@@ -46,8 +46,8 @@ export function SampleBriefGenerator() {
         <p className="eyebrow">Try it</p>
         <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Generate your sample brief.</h2>
         <p className="mt-5 text-muted-foreground leading-relaxed">
-          Tell us your business and neighbourhood. In about twenty seconds our AI drafts an illustrative brief so you
-          can see exactly what lands in your inbox each Monday.
+          Tell us your business and neighbourhood. We’ll check public directories, business websites, and connected review
+          data, then turn what we find into a sourced brief.
         </p>
         <form onSubmit={onSubmit} className="mt-8 space-y-3" noValidate>
           <input className={input} name="businessName" required minLength={2} placeholder="Business name" aria-label="Business name" />
@@ -62,11 +62,11 @@ export function SampleBriefGenerator() {
             disabled={status === "loading"}
             className="w-full rounded-sm bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent disabled:opacity-60 sm:w-auto"
           >
-            {status === "loading" ? "Researching your area…" : "Generate my sample brief"}
+            {status === "loading" ? "Checking live sources…" : "Generate my live brief"}
           </button>
           {status === "error" && <p className="text-sm text-signal-red">{error}</p>}
           <p className="text-xs text-muted-foreground">
-            Sample briefs are AI-drafted illustrations, not verified monitoring. Real briefs use live data.
+             Every generated claim is grounded in the sources we could reach. Missing sources are called out instead of guessed.
           </p>
         </form>
       </div>
@@ -74,12 +74,20 @@ export function SampleBriefGenerator() {
       <div aria-live="polite">
         {brief ? (
           <div className="animate-rise">
-            <BriefCard title={brief.title} signals={brief.signals} recommendation={brief.recommendation} why={brief.why} dateLabel="Sample · this week" />
+            <BriefCard
+              title={brief.title}
+              signals={brief.signals}
+              recommendation={brief.recommendation}
+              why={brief.why}
+              dateLabel={`Live research · ${new Date(brief.capturedAt).toLocaleDateString()}`}
+              sources={brief.sources}
+              warnings={brief.warnings}
+            />
           </div>
         ) : (
           <div className="paper-card flex min-h-[360px] items-center justify-center rounded-md border-dashed p-10 text-center">
             <p className="max-w-xs font-serif text-2xl text-muted-foreground/70">
-              {status === "loading" ? "Scanning listings, reviews and local activity…" : "Your brief will appear here."}
+              {status === "loading" ? "Checking listings, websites and review evidence…" : "Your brief will appear here."}
             </p>
           </div>
         )}

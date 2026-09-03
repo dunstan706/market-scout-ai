@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { buildEvidenceBrief, collectLocalResearch, researchForPrompt, type ResearchSource } from "@/lib/local-research.server";
 
 const BriefInput = z.object({
   businessName: z.string().trim().min(2).max(120),
@@ -21,7 +22,13 @@ export const BriefSchema = z.object({
   why: z.string(),
 });
 
-export type Brief = z.infer<typeof BriefSchema>;
+type GeneratedBrief = z.infer<typeof BriefSchema>;
+
+export type Brief = GeneratedBrief & {
+  sources: ResearchSource[];
+  warnings: string[];
+  capturedAt: string;
+};
 
 // Lenient shape for model output — tolerates alternate key names for the signal tone.
 const LooseBrief = z.object({
@@ -42,8 +49,25 @@ const LooseBrief = z.object({
 export const generateSampleBrief = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => BriefInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; brief: Brief } | { ok: false; error: string }> => {
+    let research;
+    try {
+      research = await collectLocalResearch(data);
+    } catch (error) {
+      console.error("local research failed", error);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "We couldn't reach the public research sources. Please try again.",
+      };
+    }
+
+    const evidenceBrief = buildEvidenceBrief(data, research);
     const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) return { ok: false, error: "The brief generator isn't configured yet." };
+    if (!apiKey) {
+      return {
+        ok: true,
+        brief: { ...evidenceBrief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt },
+      };
+    }
 
     const [{ streamText, Output, NoObjectGeneratedError }, { createLovableAiGatewayProvider }] = await Promise.all([
       import("ai"),
@@ -59,14 +83,17 @@ Write an illustrative Weekly Market Brief for this business:
 - Type: ${data.businessType}
 - Location: ${data.location}
 
-Use your knowledge of the area (typical neighbourhoods, local competitors, price levels, currency, seasonality) to make it feel specific and realistic, but never claim certainty about a real competitor's actions — phrase competitor names as plausible local examples.
-Return exactly 3 signals: one red (act this week), one amber (keep an eye on), one green (a strength to lean into). Each signal has a short label (2-3 words), a headline under 80 characters, and a detail under 160 characters with a concrete number, price, or distance in the local currency and units.
+Use only the supplied research evidence. Do not use prior knowledge, web knowledge, plausible examples, or invented numbers. Never claim a price change, new opening, review trend, or competitor action unless the evidence explicitly contains it. If a category has no evidence, say that it is unavailable instead of guessing.
+Return exactly 3 evidence-backed signals: one red (important market fact), one amber (pricing or availability fact), and one green (review or strength fact). Each signal has a short label (2-3 words), a headline under 80 characters, and a detail under 160 characters. Include the source name in the detail when possible.
 Then one recommendation (under 220 characters) and a one-sentence "why". Title should be "<business name>, <neighbourhood or city>". Plain text only, no markdown.
+
+Live research snapshot:
+${researchForPrompt(research)}
 
 Respond with JSON using EXACTLY these keys:
 {"title": string, "signals": [{"tone": "red"|"amber"|"green", "label": string, "headline": string, "detail": string}], "recommendation": string, "why": string}`;
 
-    const normalize = (raw: unknown): Brief | null => {
+    const normalize = (raw: unknown): GeneratedBrief | null => {
       const parsed = LooseBrief.safeParse(raw);
       if (!parsed.success) return null;
       const signals = parsed.data.signals
@@ -93,12 +120,12 @@ Respond with JSON using EXACTLY these keys:
       const brief = normalize(output);
       if (!brief) console.error("brief: normalize failed", JSON.stringify(output));
       if (!brief) return { ok: false, error: "We couldn't assemble a brief just now. Please try again." };
-      return { ok: true, brief };
+      return { ok: true, brief: { ...brief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt } };
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error)) {
         try {
           const brief = normalize(JSON.parse(error.text ?? ""));
-          if (brief) return { ok: true, brief };
+          if (brief) return { ok: true, brief: { ...brief, sources: research.sources, warnings: research.warnings, capturedAt: research.capturedAt } };
         } catch {
           /* fall through */
         }

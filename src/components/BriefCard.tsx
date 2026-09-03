@@ -1,6 +1,7 @@
 type Tone = "red" | "amber" | "green";
 
 export type Signal = { tone: Tone; label: string; headline: string; detail: string };
+export type BriefSource = { label: string; url: string; kind: "directory" | "website" | "reviews" };
 
 const toneClasses: Record<Tone, { dot: string; chip: string }> = {
   red: { dot: "bg-signal-red", chip: "bg-signal-red-soft text-signal-red" },
@@ -14,12 +15,16 @@ export function BriefCard({
   signals,
   recommendation,
   why,
+  sources,
+  warnings,
 }: {
   title: string;
   dateLabel: string;
   signals: Signal[];
   recommendation: string;
   why: string;
+  sources?: BriefSource[];
+  warnings?: string[];
 }) {
   return (
     <article className="paper-card rounded-md p-7 md:p-10 shadow-lift">
@@ -55,6 +60,24 @@ export function BriefCard({
         <p className="mt-2 font-serif text-2xl leading-snug">{recommendation}</p>
         <p className="mt-3 text-sm text-muted-foreground">Why: {why}</p>
       </div>
+
+      {sources && sources.length > 0 && (
+        <div className="mt-7 border-t border-rule pt-5">
+          <p className="eyebrow">Sources checked</p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            {sources.map((source) => (
+              <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+                {source.label}
+              </a>
+            ))}
+          </div>
+          {warnings && warnings.length > 0 && (
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              Coverage note: {warnings[0]}
+            </p>
+          )}
+        </div>
+      )}
     </article>
   );
 }
