@@ -5,7 +5,7 @@ import { motion, useScroll, useMotionValueEvent, type Variants } from "framer-mo
 import { Navigation, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type AnimatedNavItem = { name: string; href: string };
+export type AnimatedNavItem = { name: string; href?: string; onClick?: () => void; danger?: boolean };
 
 const defaultItems: AnimatedNavItem[] = [
   { name: "Home", href: "#" },
@@ -86,11 +86,15 @@ export function AnimatedNavFramer({
   logo = <Navigation className="h-6 w-6" />,
   cta,
   auth,
+  collapsible = true,
 }: {
   items?: AnimatedNavItem[];
   logo?: React.ReactNode;
   cta?: { href: string; label: string; shortLabel?: string };
   auth?: React.ReactNode;
+  /** False pins the pill permanently expanded (and keeps items visible at all
+   *  widths) — for chrome that must not shrink away, e.g. over a canvas. */
+  collapsible?: boolean;
 }) {
   const [isExpanded, setExpanded] = React.useState(true);
 
@@ -99,6 +103,7 @@ export function AnimatedNavFramer({
   const scrollPositionOnCollapse = React.useRef(0);
 
   useMotionValueEvent(scrollY, "change", (latest) => {
+    if (!collapsible) return;
     const previous = lastScrollY.current;
 
     if (isExpanded && latest > previous && latest > 150) {
@@ -116,7 +121,7 @@ export function AnimatedNavFramer({
   });
 
   const handleNavClick = (e: React.MouseEvent) => {
-    if (!isExpanded) {
+    if (collapsible && !isExpanded) {
       e.preventDefault();
       setExpanded(true);
     }
@@ -143,24 +148,49 @@ export function AnimatedNavFramer({
           {logo}
         </motion.div>
 
-        {/* Section links — hidden on small screens so the pill stays compact. */}
+        {/* Section links — hidden on small screens so the pill stays compact
+            (kept visible at every width when collapsible is false). */}
         <motion.div
           className={cn(
-            "hidden md:flex items-center gap-1 sm:gap-4",
+            collapsible ? "hidden md:flex" : "flex",
+            "items-center gap-1 sm:gap-4",
             !isExpanded && "pointer-events-none"
           )}
         >
-          {items.map((item) => (
-            <motion.a
-              key={item.name}
-              href={item.href}
-              variants={itemVariants}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1"
-            >
-              {item.name}
-            </motion.a>
-          ))}
+          {items.map((item) => {
+            const itemClass =
+              "text-sm font-medium transition-colors px-2 py-1 " +
+              (item.danger
+                ? "text-signal-red hover:text-signal-red/70"
+                : "text-muted-foreground hover:text-foreground");
+            if (item.href) {
+              return (
+                <motion.a
+                  key={item.name}
+                  href={item.href}
+                  variants={itemVariants}
+                  onClick={(e) => e.stopPropagation()}
+                  className={itemClass}
+                >
+                  {item.name}
+                </motion.a>
+              );
+            }
+            return (
+              <motion.button
+                key={item.name}
+                type="button"
+                variants={itemVariants}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onClick?.();
+                }}
+                className={itemClass}
+              >
+                {item.name}
+              </motion.button>
+            );
+          })}
         </motion.div>
 
         {auth && (

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { GlobeState } from "./GlobeScene";
 
 interface GridNode {
   x: number;
@@ -24,8 +25,35 @@ interface GridNode {
  * amber accent for proximity. Respects prefers-reduced-motion (renders a static
  * frame) and pauses the loop when scrolled out of view.
  */
-export function ConstellationGrid({ className }: { className?: string }) {
+export function ConstellationGrid({
+  className,
+  warp = true,
+  glowRadius = 220,
+  globeWarp = false,
+  globeWarpRadius = 260,
+  globeStateRef,
+}: {
+  className?: string;
+  /** Cursor repulsion physics (the landing's "warp around the cursor"). */
+  warp?: boolean;
+  /** Radius in CSS px of the amber light-up around the cursor. */
+  glowRadius?: number;
+  /** Warp the constellation around a centered "globe" footprint instead. */
+  globeWarp?: boolean;
+  /** Radius in CSS px of the globe warp — read live every frame so zooming
+   *  the globe can grow/shrink the warp without re-initializing the nodes. */
+  globeWarpRadius?: number;
+  /** Live globe limb (center + radius), written each frame by GlobeScene.
+   *  When provided it takes precedence over globeWarpRadius and anchors the
+   *  warp to the globe's true center rather than the canvas center. */
+  globeStateRef?: React.MutableRefObject<GlobeState>;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Live value, updated every render (never re-runs the effect below).
+  const warpRadiusRef = useRef(globeWarpRadius);
+  warpRadiusRef.current = globeWarpRadius;
+  // Clearance the starfield keeps around the globe's limb (CSS px).
+  const GAP = 42;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,6 +62,7 @@ export function ConstellationGrid({ className }: { className?: string }) {
     if (!ctx) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const glowR = glowRadius;
 
     // Brand palette (ink / paper / amber) as RGB strings for canvas alpha.
     const BG = "rgb(28, 23, 21)";
@@ -51,6 +80,11 @@ export function ConstellationGrid({ className }: { className?: string }) {
     let rows = 0;
     let nodes: GridNode[] = [];
     let raf = 0;
+    /* The warp's live footprint: eased toward limb + GAP every frame, so zoom
+       changes breathe the ring in/out smoothly instead of jolting the force. */
+    let currentWarpR = globeStateRef?.current.radius ?? warpRadiusRef.current;
+    let warpCx = width / 2;
+    let warpCy = height / 2;
 
     const initNodes = () => {
       nodes = [];
@@ -121,7 +155,10 @@ export function ConstellationGrid({ className }: { className?: string }) {
         const dx = mouse.x - n.x;
         const dy = mouse.y - n.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const isNear = dist < mouse.radius;
+        const gdx = n.x - warpCx;
+        const gdy = n.y - warpCy;
+        const gdist = Math.sqrt(gdx * gdx + gdy * gdy);
+        const isNear = dist < glowR || (globeWarp && gdist < currentWarpR);
 
         const baseAlpha = isNear ? 0.95 : 0.25 + Math.sin(n.pulse) * 0.1;
         ctx.fillStyle = isNear ? `rgba(${ACCENT_RGB}, ${baseAlpha})` : `rgba(${NODE_RGB}, ${baseAlpha})`;
@@ -182,7 +219,7 @@ export function ConstellationGrid({ className }: { className?: string }) {
       mouse.prevY = mouse.y;
       const speed = Math.sqrt(mouse.vx * mouse.vx + mouse.vy * mouse.vy);
 
-      // Spring-mass-damping physics: repel from cursor, ease back to anchor.
+      // Spring-mass-damping physics: repel from cursor/globe, ease back to anchor.
       const SPRING_K = 18;
       const DAMPING = 0.82;
       for (const n of nodes) {
@@ -192,7 +229,38 @@ export function ConstellationGrid({ className }: { className?: string }) {
         const dy = mouse.y - n.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < mouse.radius && dist > 0) {
+        // Globe warp: nodes inside the limb + GAP ring are eased outward so the
+        // starfield parts around the sphere. The footprint (center + eased
+        // radius) is read live from the globe's own state every frame — zooming
+        // the globe breathes the parted ring in/out smoothly, and the gentler
+        // force with extra damping settles the ring instead of buzzing it.
+        if (globeWarp) {
+          const gs2 = globeStateRef?.current;
+          if (gs2 && gs2.radius > 0) {
+            currentWarpR += (gs2.radius + GAP - currentWarpR) * Math.min(1, dt / 90);
+            warpCx = gs2.cx;
+            warpCy = gs2.cy;
+          }
+          const gdx = n.x - warpCx;
+          const gdy = n.y - warpCy;
+          const gdist = Math.sqrt(gdx * gdx + gdy * gdy);
+          if (gdist < currentWarpR && gdist > 0) {
+            const power = 1 - gdist / currentWarpR;
+            const force = power * 900;
+            const angle = Math.atan2(gdy, gdx);
+            n.vx += Math.cos(angle) * force * dt;
+            n.vy += Math.sin(angle) * force * dt;
+            // extra damping while under the globe's influence so the parted
+            // ring settles quickly instead of oscillating around the limb
+            n.vx *= 0.88;
+            n.vy *= 0.88;
+          }
+        }
+
+        // Cursor repulsion — the "warp". Disabled when warp is false so the
+        // constellation only lights up in the accent tone near the cursor
+        // (brighten, grow, radar rings) without any nodes being displaced.
+        if (warp && dist < mouse.radius && dist > 0) {
           const power = 1 - dist / mouse.radius;
           const force = power * (1500 + speed * 150);
           const angle = Math.atan2(dy, dx);
@@ -249,7 +317,7 @@ export function ConstellationGrid({ className }: { className?: string }) {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, []);
+  }, [warp, glowRadius, globeWarp, globeStateRef]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }

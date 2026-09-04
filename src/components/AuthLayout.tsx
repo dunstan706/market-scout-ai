@@ -19,16 +19,23 @@ export function AuthLayout({
     <main className="theme-dark relative flex min-h-screen items-center justify-center bg-background px-4 py-12">
       <ConstellationGrid className="fixed inset-0 h-screen w-full" />
       <div className="relative w-full max-w-md">
-        <Link to="/" className="block text-center font-serif text-3xl tracking-tight">
+        <Link
+          to="/"
+          className="animate-fade block text-center font-serif text-3xl tracking-tight"
+        >
           Localscope<span className="text-accent">.</span>
         </Link>
-        <div className="paper-card mt-6 rounded-md p-7 shadow-lift">
+        <div className="paper-card animate-rise mt-6 rounded-md p-7 shadow-lift [animation-delay:120ms]">
           <p className="eyebrow">{eyebrow}</p>
           <h1 className="mt-2 font-serif text-3xl">{title}</h1>
           {subtitle && <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{subtitle}</p>}
           <div className="mt-6">{children}</div>
         </div>
-        {footer && <div className="mt-5 text-center text-sm text-muted-foreground">{footer}</div>}
+        {footer && (
+          <div className="animate-fade mt-5 text-center text-sm text-muted-foreground [animation-delay:300ms]">
+            {footer}
+          </div>
+        )}
       </div>
     </main>
   );

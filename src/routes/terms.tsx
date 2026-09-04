@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ConstellationGrid } from "@/components/ConstellationGrid";
+import { Reveal } from "@/components/Reveal";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
@@ -46,19 +48,26 @@ const SECTIONS: Array<[string, string]> = [
 
 function TermsPage() {
   return (
-    <main className="min-h-screen">
-      <div className="mx-auto max-w-3xl px-6 py-16 md:py-24">
+    <main className="theme-dark relative min-h-screen">
+      <ConstellationGrid className="fixed inset-0 h-screen w-full" />
+      <div className="relative mx-auto max-w-3xl px-6 py-16 md:py-24">
         <div className="rule-double pt-6">
-          <p className="eyebrow">Localscope</p>
-          <h1 className="mt-4 text-4xl leading-tight md:text-5xl font-serif">Terms</h1>
-          <p className="mt-4 text-sm text-muted-foreground">Last updated: September 2026</p>
+          <p className="eyebrow animate-fade">Localscope</p>
+          <h1 className="animate-rise mt-4 text-4xl leading-tight md:text-5xl font-serif [animation-delay:80ms]">
+            Terms
+          </h1>
+          <p className="animate-fade mt-4 text-sm text-muted-foreground [animation-delay:200ms]">
+            Last updated: September 2026
+          </p>
         </div>
         <div className="mt-10 space-y-8">
           {SECTIONS.map(([title, body]) => (
-            <section key={title}>
-              <h2 className="font-serif text-2xl">{title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-            </section>
+            <Reveal key={title} seqIndex={0} seqPx={80}>
+              <section>
+                <h2 className="font-serif text-2xl">{title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+              </section>
+            </Reveal>
           ))}
         </div>
         <p className="mt-12 border-t border-rule pt-6 text-xs text-muted-foreground">
