@@ -71,16 +71,25 @@ function easeOutBack(t: number) {
 const REVEAL_SPEED = 3.0; // rad/s — one full turn ≈ 2.1s
 const REVEAL_MS = ((Math.PI * 2) / REVEAL_SPEED) * 1000;
 const MARK_POP_MS = 650;
+/* Selecting a business: a calm, deliberate rotation that brings the mark back
+   to the front — never more than half a turn, then it settles. */
+const FOCUS_SPEED = 2.0; // rad/s
 /* With the globe's resting tilt (-0.36) the south pole faces the viewer, so
    the front meridian's northern latitudes sit behind the tangent plane and
    would be culled. A southern latitude lands the mark on the visible front. */
 const MARK_LAT = -15;
 const ACCENT = "190, 105, 25";
+/* px — a press within this distance of the revealed mark opens its callout */
+const MARK_HIT = 24;
 
 export function GlobeScene({
   stateRef,
   className,
   revealTriggerRef,
+  holdStill = false,
+  onMarkClick,
+  startRevealed = false,
+  focusTriggerRef,
 }: {
   /** Receives the globe's live center + limb radius every frame. */
   stateRef: React.MutableRefObject<GlobeState>;
@@ -88,8 +97,35 @@ export function GlobeScene({
   /** Increment to start the reveal sequence (one fast full rotation that
    *  clears the globe's type, then pops the business mark onto its front). */
   revealTriggerRef?: React.MutableRefObject<number>;
+  /** While a callout box is open below the mark, the globe holds still so the
+   *  mark (and the box under it) stays put. When false it drifts at its
+   *  normal idle speed again. */
+  holdStill?: boolean;
+  /** Fired when the revealed mark is pressed (only while it is visible on the
+   *  front of the globe and the globe is not held still). */
+  onMarkClick?: () => void;
+  /** Start with the reveal already complete — type cleared and the mark
+   *  placed on the front — instead of the pristine dotted globe. Used when a
+   *  business already exists (e.g. synced from the old dashboard) so the mark
+   *  and its callout box are present without replaying the add sweep. */
+  startRevealed?: boolean;
+  /** Increment to ask the globe to rotate so the revealed mark faces the
+   *  front again (used when a business is selected from the nav dropdown). */
+  focusTriggerRef?: React.MutableRefObject<number>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  /* Latest prop values, read from the event/draw handlers without re-running
+     the big effect below — that effect owns all of the globe's mutable state
+     (spin, reveal, …) and would reset it if it re-ran on every open/close. */
+  const latestRef = useRef<{
+    holdStill: boolean;
+    onMarkClick?: (() => void) | undefined;
+  }>({ holdStill: false, onMarkClick: undefined });
+  useEffect(() => {
+    latestRef.current.holdStill = holdStill;
+    latestRef.current.onMarkClick = onMarkClick ?? undefined;
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -173,12 +209,39 @@ export function GlobeScene({
       markLon: 0,
       popT: 0,
     };
+    if (startRevealed) {
+      // A business already exists: skip the sweep and land the mark on the
+      // front, fully popped, as if the reveal had just completed.
+      reveal.done = true;
+      reveal.popT = 1;
+      reveal.markLon = Math.PI / 2 - spin;
+    }
+    /* focus rotation: spin (at most half a turn) so the mark faces the front */
+    const focus = { active: false, target: 0, dir: 1, remaining: 0 };
     let lastTrigger = 0;
+    let lastFocusTrigger = 0;
+
+    const startFocus = () => {
+      if (!reveal.done) return; // nothing to bring to the front yet
+      // The mark sits dead centre of the disc when cos(markLon + spin) = 0
+      // (x1 = 0), i.e. spin = pi/2 - markLon — the front meridian.
+      const target = Math.PI / 2 - reveal.markLon;
+      const delta = Math.atan2(
+        Math.sin(target - spin),
+        Math.cos(target - spin)
+      ); // shortest way around the sphere
+      focus.target = spin + delta;
+      focus.dir = delta >= 0 ? 1 : -1;
+      focus.remaining = Math.abs(delta);
+      focus.active = focus.remaining > 0.001;
+    };
 
     const startReveal = () => {
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       reveal.startSpin = spin;
-      reveal.markLon = -spin; // faces dead front when the full turn completes
+      // The mark lands dead centre of the disc (x1 = 0) when the sweep
+      // finishes: markLon + (startSpin + 2pi) = pi/2.
+      reveal.markLon = Math.PI / 2 - spin;
       reveal.t = 0;
       reveal.popT = 0;
       if (reduced) {
@@ -207,7 +270,24 @@ export function GlobeScene({
 
     const onPointerDown = (e: PointerEvent) => {
       if (isInteractive(e.target)) return;
-      drag = local(e);
+      /* While a callout box is open the globe is held still, and dismissing it
+         is the page's job (outside clicks) — never start a drag here. */
+      if (latestRef.current.holdStill) return;
+      const p = local(e);
+      /* A press on the revealed amber mark re-opens its callout box instead of
+         starting a drag — the mark is moving at idle speed, so the hit radius
+         is generous. */
+      const st = stateRef.current;
+      if (
+        reveal.done &&
+        st.markVisible &&
+        Math.hypot(p.x - st.markX, p.y - st.markY) < MARK_HIT
+      ) {
+        latestRef.current.onMarkClick?.();
+        return;
+      }
+      focus.active = false; // grabbing the globe cancels a focus rotation
+      drag = p;
     };
     const onPointerMove = (e: PointerEvent) => {
       const p = local(e);
@@ -255,10 +335,25 @@ export function GlobeScene({
         } else {
           spin += REVEAL_SPEED * (dt / 1000);
         }
+      } else if (focus.active) {
+        // rotating to the selected business's mark: constant pace, then settle
+        const step = FOCUS_SPEED * (dt / 1000);
+        if (step >= focus.remaining) {
+          spin = focus.target;
+          focus.active = false;
+          vel = 0;
+        } else {
+          spin += step * focus.dir;
+          focus.remaining -= step;
+        }
       } else {
         if (!drag) {
-          const idle = reveal.done ? 0 : hover ? 0.045 : 0.16; // hold still after the reveal
-          vel += (idle - vel) * Math.min(1, reveal.done ? dt / 250 : dt / 900);
+          /* The globe always drifts at its idle speed — except while a
+             callout box is open below the mark (the mark must stay put under
+             it) and while the cursor is reading the type near the sphere. */
+          const held = reveal.done && latestRef.current.holdStill;
+          const idle = held ? 0 : hover ? 0.045 : 0.16;
+          vel += (idle - vel) * Math.min(1, held ? dt / 250 : dt / 900);
           vtilt *= Math.pow(0.9, dt / 16);
           tilt += (vtilt * dt) / 1000;
           tilt += (-0.36 - tilt) * Math.min(1, dt / 4000);
@@ -458,6 +553,11 @@ export function GlobeScene({
         lastTrigger = trig;
         startReveal();
       }
+      const foc = focusTriggerRef?.current ?? 0;
+      if (foc !== lastFocusTrigger) {
+        lastFocusTrigger = foc;
+        startFocus();
+      }
       draw(now, dt);
       raf = requestAnimationFrame(loop);
     };
@@ -500,7 +600,7 @@ export function GlobeScene({
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("mouseleave", onBlur);
     };
-  }, [stateRef, revealTriggerRef]);
+  }, [stateRef, revealTriggerRef, focusTriggerRef, startRevealed]);
 
   return (
     <canvas

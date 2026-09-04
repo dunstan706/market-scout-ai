@@ -2,10 +2,21 @@
 
 import * as React from "react";
 import { motion, useScroll, useMotionValueEvent, type Variants } from "framer-motion";
-import { Navigation, Menu } from "lucide-react";
+import { ChevronDown, Menu, Navigation } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type AnimatedNavItem = { name: string; href?: string; onClick?: () => void; danger?: boolean };
+export type AnimatedNavItem = {
+  name: string;
+  href?: string;
+  onClick?: () => void;
+  danger?: boolean;
+  /** Renders the item as a dropdown trigger with a chevron; the children are
+   *  listed in a panel that drops below the pill. A child with neither href
+   *  nor onClick renders as a muted, non-interactive row. */
+  children?: AnimatedNavItem[];
+  /** Highlights the row as the current selection (dropdown children). */
+  active?: boolean;
+};
 
 const defaultItems: AnimatedNavItem[] = [
   { name: "Home", href: "#" },
@@ -97,6 +108,20 @@ export function AnimatedNavFramer({
   collapsible?: boolean;
 }) {
   const [isExpanded, setExpanded] = React.useState(true);
+  const [openDropdown, setOpenDropdown] = React.useState<string | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Close any open dropdown when the pointer lands outside the pill + panel.
+  React.useEffect(() => {
+    if (!openDropdown) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target;
+      if (t instanceof Node && wrapRef.current?.contains(t)) return;
+      setOpenDropdown(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [openDropdown]);
 
   const { scrollY } = useScroll();
   const lastScrollY = React.useRef(0);
@@ -128,7 +153,7 @@ export function AnimatedNavFramer({
   };
 
   return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+    <div ref={wrapRef} className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
       <motion.nav
         initial={{ y: -80, opacity: 0 }}
         animate={isExpanded ? "expanded" : "collapsed"}
@@ -163,6 +188,32 @@ export function AnimatedNavFramer({
               (item.danger
                 ? "text-signal-red hover:text-signal-red/70"
                 : "text-muted-foreground hover:text-foreground");
+            if (item.children) {
+              const open = openDropdown === item.name;
+              return (
+                <motion.button
+                  key={item.name}
+                  type="button"
+                  variants={itemVariants}
+                  aria-expanded={open}
+                  aria-haspopup="menu"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenDropdown(open ? null : item.name);
+                  }}
+                  className={cn(itemClass, "inline-flex items-center gap-1")}
+                >
+                  {item.name}
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      open && "rotate-180"
+                    )}
+                    aria-hidden="true"
+                  />
+                </motion.button>
+              );
+            }
             if (item.href) {
               return (
                 <motion.a
@@ -220,6 +271,68 @@ export function AnimatedNavFramer({
           </motion.div>
         </div>
       </motion.nav>
+
+      {/* Dropdown panels — siblings of the pill so the pill's rounded
+          overflow-hidden never clips them. Centered under the pill. */}
+      {items.map((item) =>
+        item.children && openDropdown === item.name ? (
+          <motion.div
+            key={`${item.name}-menu`}
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            role="menu"
+            className="absolute left-1/2 top-full mt-2 w-56 -translate-x-1/2 rounded-md border border-rule bg-background/90 p-1 shadow-lift backdrop-blur-sm"
+          >
+            {item.children.map((child) => {
+              const childClass =
+                "flex w-full items-center gap-2 whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors " +
+                (child.danger
+                  ? "text-signal-red hover:bg-rule/60 hover:text-signal-red/80"
+                  : child.active
+                    ? "text-foreground hover:bg-rule/60"
+                    : "text-muted-foreground hover:bg-rule/60 hover:text-foreground");
+              if (child.href) {
+                return (
+                  <a
+                    key={child.name}
+                    href={child.href}
+                    role="menuitem"
+                    onClick={() => setOpenDropdown(null)}
+                    className={childClass}
+                  >
+                    {child.name}
+                  </a>
+                );
+              }
+              if (child.onClick) {
+                return (
+                  <button
+                    key={child.name}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpenDropdown(null);
+                      child.onClick?.();
+                    }}
+                    className={childClass}
+                  >
+                    {child.name}
+                  </button>
+                );
+              }
+              return (
+                <span
+                  key={child.name}
+                  className="block w-full cursor-default whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm text-muted-foreground/70"
+                >
+                  {child.name}
+                </span>
+              );
+            })}
+          </motion.div>
+        ) : null
+      )}
     </div>
   );
 }
