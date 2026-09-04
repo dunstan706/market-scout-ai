@@ -53,6 +53,7 @@ export type Database = {
           business_name: string | null
           business_type: string
           location: string | null
+          price_point: string | null
           created_at: string
           updated_at: string
         }
@@ -61,6 +62,7 @@ export type Database = {
           business_name?: string | null
           business_type?: string
           location?: string | null
+          price_point?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -69,6 +71,7 @@ export type Database = {
           business_name?: string | null
           business_type?: string
           location?: string | null
+          price_point?: string | null
           created_at?: string
           updated_at?: string
         }

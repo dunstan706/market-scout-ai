@@ -10,7 +10,9 @@ import {
   parseDetectedChanges,
   parseResearchSnapshot,
   type DetectedChange,
+  type ResearchSnapshot as StoredResearchSnapshot,
 } from "@/lib/change-detection";
+import { buildMarketAnalysis, type MarketAnalysis } from "@/lib/market-analysis";
 import type { Brief } from "@/lib/brief.functions";
 
 // All handlers here are wrapped in requireSupabaseAuth, which validates the
@@ -24,12 +26,16 @@ export type Profile = {
   businessName: string;
   businessType: BusinessType;
   location: string;
+  // Optional "your typical price" (raw text, e.g. "$45") — anchors the
+  // price-position analysis. Blank means no price position is reported.
+  pricePoint?: string;
 };
 
 const ProfileInput = z.object({
   businessName: z.string().trim().min(2).max(120),
   businessType: BusinessTypeSchema,
   location: z.string().trim().min(2).max(160),
+  pricePoint: z.string().trim().max(40).optional(),
 });
 
 // Shape of a generated brief as stored in the briefs table (jsonb).
@@ -56,6 +62,7 @@ export type MonitoringStatus = {
   baseline: boolean;
   snapshotCount: number;
   changes: DetectedChange[];
+  analysis: MarketAnalysis | null;
 };
 
 type ProfileRow = Tables<"profiles">;
@@ -68,6 +75,35 @@ function describeError(message: string, detail: string | undefined): string {
   return `${message} ${detail}`;
 }
 
+function normalizePricePoint(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed.slice(0, 40) : null;
+}
+
+type ProfileWriteRow = {
+  id: string;
+  business_name: string;
+  business_type: string;
+  location: string;
+  price_point?: string | null;
+  updated_at: string;
+};
+
+// The optional price_point column ships in a later migration. Until it is
+// applied, saves that include it would fail with an unknown-column error — so
+// the first such failure is detected and downgraded to a save without the
+// column (cached per process), keeping profile saves working everywhere.
+let pricePointSupported: boolean | null = null;
+
+function isMissingPricePointError(error: { code?: string; message?: string }): boolean {
+  if (error.code === "42703") return true;
+  return (
+    typeof error.message === "string" &&
+    /price_point/i.test(error.message) &&
+    /column|does not exist|42703/i.test(error.message)
+  );
+}
+
 function toProfile(row: ProfileRow | null): Profile | null {
   if (!row) return null;
   const businessType: BusinessType =
@@ -76,6 +112,7 @@ function toProfile(row: ProfileRow | null): Profile | null {
     businessName: row.business_name ?? "",
     businessType,
     location: row.location ?? "",
+    pricePoint: row.price_point ?? "",
   };
 }
 
@@ -102,6 +139,7 @@ export type Business = {
   businessName: string;
   businessType: BusinessType;
   location: string;
+  pricePoint?: string;
 };
 
 function toBusiness(row: ProfileRow): Business {
@@ -112,6 +150,7 @@ function toBusiness(row: ProfileRow): Business {
     businessName: row.business_name ?? "",
     businessType,
     location: row.location ?? "",
+    pricePoint: row.price_point ?? "",
   };
 }
 
@@ -146,21 +185,37 @@ export const createBusiness = createServerFn({ method: "POST" })
         ),
       );
     }
-    const row = {
+    const base: ProfileWriteRow = {
       id: context.userId,
       business_name: data.businessName,
       business_type: data.businessType,
       location: data.location,
       updated_at: new Date().toISOString(),
     };
-    const { data: created, error } = await context.supabase
-      .from("profiles")
-      .upsert(row, { onConflict: "id" })
-      .select("*")
-      .maybeSingle();
-    if (error || !created) {
+    const payload = (withPricePoint: boolean): ProfileWriteRow =>
+      withPricePoint ? { ...base, price_point: normalizePricePoint(data.pricePoint) } : base;
+    const upsertWith = async (withPricePoint: boolean) => {
+      const result = await context.supabase
+        .from("profiles")
+        .upsert(payload(withPricePoint), { onConflict: "id" });
+      return result.error;
+    };
+    let error = await upsertWith(pricePointSupported !== false);
+    if (error && isMissingPricePointError(error)) {
+      pricePointSupported = false;
+      error = await upsertWith(false);
+    }
+    if (error) {
       console.error("createBusiness failed", error);
-      throw new Error(describeError("Could not add your business.", error?.message));
+      throw new Error(describeError("Could not add your business.", error.message));
+    }
+    const { data: created } = await context.supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", context.userId)
+      .maybeSingle();
+    if (!created) {
+      throw new Error(describeError("Could not add your business.", "Profile was not created."));
     }
     return { business: toBusiness(created) };
   });
@@ -200,16 +255,26 @@ export const saveProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ProfileInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
-    const { error } = await context.supabase.from("profiles").upsert(
-      {
-        id: context.userId,
-        business_name: data.businessName,
-        business_type: data.businessType,
-        location: data.location,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    );
+    const base: ProfileWriteRow = {
+      id: context.userId,
+      business_name: data.businessName,
+      business_type: data.businessType,
+      location: data.location,
+      updated_at: new Date().toISOString(),
+    };
+    const payload = (withPricePoint: boolean): ProfileWriteRow =>
+      withPricePoint ? { ...base, price_point: normalizePricePoint(data.pricePoint) } : base;
+    const upsertWith = async (withPricePoint: boolean) => {
+      const result = await context.supabase
+        .from("profiles")
+        .upsert(payload(withPricePoint), { onConflict: "id" });
+      return result.error;
+    };
+    let error = await upsertWith(pricePointSupported !== false);
+    if (error && isMissingPricePointError(error)) {
+      pricePointSupported = false;
+      error = await upsertWith(false);
+    }
     if (error) {
       console.error("saveProfile failed", error);
       throw new Error(describeError("Could not save your profile.", error.message));
@@ -286,7 +351,14 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
     async ({
       context,
     }): Promise<
-      | { ok: true; brief: Brief; changes: DetectedChange[]; monitoredAt: string; baseline: boolean }
+      | {
+          ok: true;
+          brief: Brief;
+          changes: DetectedChange[];
+          monitoredAt: string;
+          baseline: boolean;
+          analysis: MarketAnalysis;
+        }
       | { ok: false; error: string }
     > => {
       const userId = context.userId;
@@ -320,14 +392,20 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         };
       }
 
-      const { data: latest } = await context.supabase
+      // Recent stored history drives both change detection (previous run) and
+      // the trend analysis (the whole window). Newest first, then reversed.
+      const { data: historyRows } = await context.supabase
         .from("monitoring_snapshots")
         .select("snapshot")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const previous = latest ? parseResearchSnapshot(latest.snapshot) : null;
+        .limit(8);
+      const historyAsc: StoredResearchSnapshot[] = [];
+      for (const row of [...(historyRows ?? [])].reverse()) {
+        const parsed = parseResearchSnapshot(row.snapshot);
+        if (parsed) historyAsc.push(parsed);
+      }
+      const previous = historyAsc[historyAsc.length - 1] ?? null;
       const changes = detectChanges(previous, research);
 
       let generated;
@@ -374,6 +452,7 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         changes,
         monitoredAt: research.capturedAt,
         baseline: previous === null,
+        analysis: buildMarketAnalysis(research, historyAsc, profile.pricePoint ?? null),
       };
     },
   );
@@ -382,23 +461,39 @@ export const getMonitoringStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ status: MonitoringStatus }> => {
     const userId = context.userId;
-    const { data: latest } = await context.supabase
+    const { data: profileRow } = await context.supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+    const profile = toProfile(profileRow);
+    const { data: rows } = await context.supabase
       .from("monitoring_snapshots")
-      .select("detected_changes, created_at")
+      .select("snapshot, detected_changes, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(8);
+    const ordered = [...(rows ?? [])].reverse(); // oldest first
+    const snapshotsAsc: StoredResearchSnapshot[] = [];
+    for (const row of ordered) {
+      const parsed = parseResearchSnapshot(row.snapshot);
+      if (parsed) snapshotsAsc.push(parsed);
+    }
     const { count } = await context.supabase
       .from("monitoring_snapshots")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId);
+    const latestRow = ordered[ordered.length - 1] ?? null;
+    const latest = snapshotsAsc[snapshotsAsc.length - 1] ?? null;
     return {
       status: {
-        lastRunAt: latest?.created_at ?? null,
+        lastRunAt: latestRow?.created_at ?? null,
         baseline: latest === null,
         snapshotCount: count ?? 0,
-        changes: latest ? parseDetectedChanges(latest.detected_changes) : [],
+        changes: latestRow ? parseDetectedChanges(latestRow.detected_changes) : [],
+        analysis: latest
+          ? buildMarketAnalysis(latest, snapshotsAsc.slice(0, -1), profile?.pricePoint ?? null)
+          : null,
       },
     };
   });

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { BriefCard, type Signal } from "@/components/BriefCard";
+import { MarketSnapshot } from "@/components/MarketSnapshot";
 import {
   claimWaitlistProfile,
   createBusiness,
@@ -67,6 +68,7 @@ const EMPTY_STATUS: MonitoringStatus = {
   baseline: true,
   snapshotCount: 0,
   changes: [],
+  analysis: null,
 };
 
 function DashboardPage() {
@@ -87,7 +89,12 @@ function DashboardPage() {
   const [screen, setScreen] = useState<Screen>("business");
   const [tab, setTab] = useState<BusinessTab>("monitoring");
   const [tabDir, setTabDir] = useState<"left" | "right" | null>(null);
-  const [draft, setDraft] = useState<Profile>({ businessName: "", businessType: "salon", location: "" });
+  const [draft, setDraft] = useState<Profile>({
+    businessName: "",
+    businessType: "salon",
+    location: "",
+    pricePoint: "",
+  });
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
   const [addError, setAddError] = useState("");
@@ -151,6 +158,7 @@ function DashboardPage() {
           businessName: first.businessName,
           businessType: first.businessType,
           location: first.location,
+          pricePoint: first.pricePoint ?? "",
         });
         setScreen("business");
         setTab("monitoring");
@@ -193,6 +201,7 @@ function DashboardPage() {
       businessName: business.businessName,
       businessType: business.businessType,
       location: business.location,
+      pricePoint: business.pricePoint ?? "",
     });
     setScreen("business");
     setTab("monitoring");
@@ -206,7 +215,7 @@ function DashboardPage() {
   // later with billing).
   function onAddClick() {
     if (businesses.length === 0) {
-      setDraft({ businessName: "", businessType: "salon", location: "" });
+      setDraft({ businessName: "", businessType: "salon", location: "", pricePoint: "" });
       setAddError("");
       setScreen("add");
       return;
@@ -225,6 +234,7 @@ function DashboardPage() {
         businessName: business.businessName,
         businessType: business.businessType,
         location: business.location,
+        pricePoint: business.pricePoint ?? "",
       });
       setScreen("business");
       setTab("monitoring");
@@ -250,6 +260,7 @@ function DashboardPage() {
                 businessName: draft.businessName,
                 businessType: draft.businessType,
                 location: draft.location,
+                pricePoint: draft.pricePoint ?? "",
               }
             : b,
         ),
@@ -609,6 +620,18 @@ function DashboardPage() {
                     value={draft.location}
                     onChange={(e) => setDraft({ ...draft, location: e.target.value })}
                   />
+                  <input
+                    className={input}
+                    name="pricePoint"
+                    maxLength={40}
+                    placeholder="Your typical price (optional) — e.g. $45"
+                    aria-label="Your typical price"
+                    value={draft.pricePoint ?? ""}
+                    onChange={(e) => setDraft({ ...draft, pricePoint: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional — lets your briefs rank your price against the local market.
+                  </p>
                   <select
                     className={input}
                     name="businessType"
@@ -635,6 +658,13 @@ function DashboardPage() {
 
               {tab === "monitoring" && (
                 <div className="space-y-6">
+                  {status.analysis && (
+                    <section aria-label="Market snapshot" className="paper-card rounded-md p-6 md:p-7">
+                      <p className="eyebrow">Market snapshot</p>
+                      <MarketSnapshot analysis={status.analysis} className="mt-4" />
+                    </section>
+                  )}
+
                   <MonitoringSummary status={status} latestChanges={latestChanges} genState={genState} />
 
                   {status.baseline && !latest && genState !== "loading" && (

@@ -42,6 +42,20 @@ export type ResearchCompetitor = {
   sourceLabel: string;
 };
 
+export type OwnListingReview = {
+  rating?: number | undefined;
+  text?: string | undefined;
+};
+
+export type OwnListing = {
+  name: string;
+  rating?: number | undefined;
+  reviewCount?: number | undefined;
+  url?: string | undefined;
+  address?: string | undefined;
+  reviews?: OwnListingReview[] | undefined;
+};
+
 export type ResearchSnapshot = {
   location: {
     displayName: string;
@@ -49,6 +63,7 @@ export type ResearchSnapshot = {
     longitude: number;
   };
   competitors: ResearchCompetitor[];
+  ownListing?: OwnListing | undefined;
   sources: ResearchSource[];
   warnings: string[];
   capturedAt: string;
@@ -514,6 +529,84 @@ async function fetchGoogleCompetitors(
   return cacheSet(cacheKey, competitors, PLACES_CACHE_TTL_MS);
 }
 
+const OWN_LISTING_RADIUS_METERS = 1_500;
+
+// Looks up the business's own Google listing (exact name near the geocoded
+// location) so reputation — rating, review count, newest reviews — can be
+// tracked across scans and benchmarked against the field. Returns undefined
+// when there is no API key or no matching listing; small businesses without a
+// Google presence are common, so the absence surfaces as a UI nudge instead of
+// an error. Negative results are not cached, so a listing that appears later
+// is picked up on a future scan.
+async function fetchOwnListing(
+  location: { displayName: string; latitude: number; longitude: number },
+  input: { businessName: string },
+): Promise<OwnListing | undefined> {
+  const apiKey = googleApiKey();
+  if (!apiKey) return undefined;
+  const cacheKey = `own:${input.businessName.trim().toLocaleLowerCase()}|${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`;
+  const cached = cacheGet<OwnListing>(cacheKey);
+  if (cached) return cached;
+  try {
+    const response = await fetchJson<GoogleSearchResponse>(GOOGLE_PLACES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "places.displayName,places.formattedAddress,places.googleMapsUri,places.rating,places.userRatingCount,places.location,places.reviews",
+      },
+      body: JSON.stringify({
+        textQuery: input.businessName,
+        maxResultCount: 8,
+        languageCode: "en",
+        locationBias: {
+          circle: {
+            center: { latitude: location.latitude, longitude: location.longitude },
+            radius: OWN_LISTING_RADIUS_METERS,
+          },
+        },
+      }),
+    });
+    const matches = (response.places ?? []).flatMap<{
+      place: GooglePlace;
+      name: string;
+      distanceMeters: number;
+      reviews: OwnListingReview[];
+    }>((place) => {
+      const name = text(place.displayName?.text);
+      const latitude = number(place.location?.latitude);
+      const longitude = number(place.location?.longitude);
+      if (!name || latitude === undefined || longitude === undefined) return [];
+      if (!namesLikelyMatch(input.businessName, name)) return [];
+      const distanceMeters = distanceInMeters(location.latitude, location.longitude, latitude, longitude);
+      if (distanceMeters > OWN_LISTING_RADIUS_METERS) return [];
+      const reviews: OwnListingReview[] = (place.reviews ?? [])
+        .map((review) => ({
+          ...(number(review.rating) !== undefined ? { rating: number(review.rating) } : {}),
+          ...(text(review.text?.text) ? { text: text(review.text?.text)?.slice(0, 240) } : {}),
+        }))
+        .filter((review) => review.text !== undefined);
+      return [{ place, name, distanceMeters, reviews }];
+    });
+    matches.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    const best = matches[0];
+    if (!best) return undefined;
+    const listing: OwnListing = {
+      name: best.name,
+      ...(number(best.place.rating) !== undefined ? { rating: number(best.place.rating) } : {}),
+      ...(number(best.place.userRatingCount) !== undefined ? { reviewCount: number(best.place.userRatingCount) } : {}),
+      ...(text(best.place.googleMapsUri) ? { url: text(best.place.googleMapsUri) } : {}),
+      ...(text(best.place.formattedAddress) ? { address: text(best.place.formattedAddress) } : {}),
+      ...(best.reviews.length > 0 ? { reviews: best.reviews } : {}),
+    };
+    return cacheSet(cacheKey, listing, PLACES_CACHE_TTL_MS);
+  } catch (error) {
+    console.error("own listing lookup failed", error instanceof Error ? error.message : error);
+    return undefined;
+  }
+}
+
 export function isSameCompetitor(a: ResearchCompetitor, b: ResearchCompetitor): boolean {
   if (!namesLikelyMatch(a.name, b.name)) return false;
   if (
@@ -578,6 +671,13 @@ export async function collectLocalResearch(input: {
   const warnings: string[] = [];
   const sources: ResearchSource[] = [];
   const placesKey = googleApiKey();
+
+  // Find the user's own listing so their rating / reviews / price position can
+  // be benchmarked and tracked across scans — it is never reported as a
+  // competitor. Only runs when a Google key is connected.
+  const ownListing = placesKey
+    ? await fetchOwnListing(resolvedLocation, input).catch(() => undefined)
+    : undefined;
 
   const [osmResult, googleResult] = await Promise.allSettled([
     fetchOpenStreetMapCompetitors(resolvedLocation, input.businessName, input.businessType),
@@ -668,6 +768,7 @@ export async function collectLocalResearch(input: {
     competitors,
     sources,
     warnings,
+    ownListing,
     capturedAt: new Date().toISOString(),
   };
 }
@@ -691,6 +792,17 @@ export function researchForPrompt(research: ResearchSnapshot): string {
       sourceUrl: competitor.sourceUrl,
     })),
     warnings: research.warnings,
+    ownListing: research.ownListing
+      ? {
+          name: research.ownListing.name,
+          rating: research.ownListing.rating,
+          reviewCount: research.ownListing.reviewCount,
+          url: research.ownListing.url,
+          latestReviews: (research.ownListing.reviews ?? [])
+            .slice(0, 2)
+            .map((review) => ({ rating: review.rating, text: review.text })),
+        }
+      : undefined,
   });
 }
 

@@ -1,6 +1,12 @@
 import { BriefSchema, normalizeLooseBrief, type GeneratedBrief } from "@/lib/brief-core";
 import { buildEvidenceBrief, researchForPrompt, type ResearchSnapshot } from "@/lib/local-research.server";
 import { changesToBriefSignals, type DetectedChange } from "@/lib/change-detection";
+import {
+  analysisForPrompt,
+  formatMoney,
+  formatOrdinal,
+  type MarketAnalysis,
+} from "@/lib/market-analysis";
 
 // Shared brief writer used by the public sample generator, the authenticated
 // dashboard, and the weekly monitoring run. When detected changes are supplied
@@ -17,6 +23,7 @@ export type BriefWriterOptions = {
   input: BriefSourceInput;
   research: ResearchSnapshot;
   changes?: DetectedChange[];
+  analysis?: MarketAnalysis;
 };
 
 export type BriefErrorCode = "no_object" | "rate_limited" | "paused" | "unknown";
@@ -52,7 +59,7 @@ export async function writeBrief(options: BriefWriterOptions): Promise<Generated
   return writeAiBrief(options);
 }
 
-async function writeAiBrief({ input, research, changes }: BriefWriterOptions): Promise<GeneratedBrief> {
+async function writeAiBrief({ input, research, changes, analysis }: BriefWriterOptions): Promise<GeneratedBrief> {
   const apiKey = process.env["LOVABLE_API_KEY"] as string;
   const [{ streamText, Output, NoObjectGeneratedError }, { createLovableAiGatewayProvider }] = await Promise.all([
     import("ai"),
@@ -69,13 +76,19 @@ async function writeAiBrief({ input, research, changes }: BriefWriterOptions): P
           .join("\n")}\n\n`
       : "";
 
+  // Market context is computed from the same stored scans (see
+  // market-analysis.ts) — it is derived evidence with explicit denominators
+  // ("among N that publish prices"), so it can anchor "where you stand"
+  // signals without inventing numbers.
+  const marketBlock = analysis ? analysisForPrompt(analysis) : "";
+
   const prompt = `You are Localscope, an AI local-market analyst for small businesses.
 Write a Weekly Market Brief for this business:
 - Name: ${input.businessName}
 - Type: ${input.businessType}
 - Location: ${input.location}
 
-${changeBlock}Use only the supplied research evidence and detected changes. Do not use prior knowledge, web knowledge, plausible examples, or invented numbers. Never claim a price change, new opening, review trend, or competitor action unless the evidence or a detected change explicitly contains it — including old and new values where a change is reported. If a category has no evidence, say that it is unavailable instead of guessing.
+${changeBlock}${marketBlock ? `${marketBlock}\n\n` : ""}Use only the supplied research evidence, detected changes, and market context. Do not use prior knowledge, web knowledge, plausible examples, or invented numbers. Never claim a price change, new opening, review trend, or competitor action unless the evidence, a detected change, or the market context explicitly contains it — including old and new values where a change is reported. You may report where the business sits in the market (rating rank, price position) only when the market context states it with a denominator. If a category has no evidence, say that it is unavailable instead of guessing.
 Return exactly 3 signals: one red (important market fact or threat), one amber (watch item), and one green (opportunity or strength). Each signal has a short label (2-3 words), a headline under 80 characters, and a detail under 160 characters. Include the source name and old → new values in the detail when a change is reported.
 Then one recommendation (under 220 characters) and a one-sentence "why". Title should be "<business name>, <neighbourhood or city>". Plain text only, no markdown.
 
@@ -117,7 +130,7 @@ Respond with JSON using EXACTLY these keys:
   }
 }
 
-function buildFallbackBrief({ input, research, changes }: BriefWriterOptions): GeneratedBrief {
+function buildFallbackBrief({ input, research, changes, analysis }: BriefWriterOptions): GeneratedBrief {
   const evidence = buildEvidenceBrief(input, research);
   const signals: GeneratedBrief["signals"] = [];
   for (const change of changesToBriefSignals(changes ?? [])) {
@@ -129,6 +142,49 @@ function buildFallbackBrief({ input, research, changes }: BriefWriterOptions): G
     if (!signals.some((existing) => existing.headline === signal.headline)) {
       signals.push(signal);
     }
+  }
+  // Own-listing position is a high-value signal the evidence brief can't see
+  // (it only looks at competitors) — add it once nothing already covers it.
+  const own = analysis?.own;
+  if (
+    signals.length < 3 &&
+    own?.found &&
+    own.rating !== undefined &&
+    !signals.some((signal) => signal.label === "Your business" || /^Your (listing|rating|price)/.test(signal.headline))
+  ) {
+    const rank =
+      own.ratingRank !== null && own.reviewedCount > 0
+        ? ` — ${formatOrdinal(own.ratingRank)} of ${own.reviewedCount} reviewed nearby`
+        : "";
+    signals.push({
+      tone: own.rating >= 4.5 ? "green" : own.rating >= 3.5 ? "amber" : "red",
+      label: "Your business",
+      headline: `Your listing is rated ${own.rating.toFixed(1)}/5${rank}`,
+      detail:
+        (own.reviewCount !== undefined && own.reviewCount > 0
+          ? `${own.reviewCount} ratings on your listing`
+          : "Your listing is live on Google Places") + " · source: Google Places",
+    });
+  }
+  // Price position makes the brief actionable; only when your price is set.
+  if (
+    signals.length < 3 &&
+    own?.found &&
+    own.ownPrice &&
+    own.ownPriceRank !== null &&
+    own.pricedCount > 0 &&
+    !signals.some((signal) => signal.label === "Your business" || /^Your (listing|rating|price)/.test(signal.headline))
+  ) {
+    const median =
+      own.priceMedian !== null
+        ? ` (median ${formatMoney(own.priceMedian, own.ownPrice.currency)})`
+        : "";
+    signals.push({
+      tone: "green",
+      label: "Your price",
+      headline: `Your price sits ${formatOrdinal(own.ownPriceRank)} cheapest of ${own.pricedCount} publishing`,
+      detail: `At ${formatMoney(own.ownPrice.amount, own.ownPrice.currency)}${median} · source: Google Places`,
+    });
   }
   // Evidence always supplies three signals; this guard keeps the type honest.
   if (signals.length === 0) signals.push(...evidence.signals);

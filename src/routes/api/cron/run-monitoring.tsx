@@ -43,18 +43,23 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
       { collectLocalResearch },
       { writeBrief },
       { detectChanges, parseResearchSnapshot },
+      { buildMarketAnalysis },
       { sendEmail, renderBriefEmail },
     ] = await Promise.all([
       import("@/integrations/supabase/client.server"),
       import("@/lib/local-research.server"),
       import("@/lib/brief-writer.server"),
       import("@/lib/change-detection"),
+      import("@/lib/market-analysis"),
       import("@/lib/email.server"),
     ]);
 
+    // select("*") (not an explicit column list) so a profile table that has
+    // not yet received the optional price_point migration still works — the
+    // column simply reads as absent.
     const { data: profiles, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, business_name, business_type, location")
+      .select("*")
       .not("business_name", "is", null)
       .not("location", "is", null)
       .limit(100);
@@ -80,17 +85,25 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
 
         const research = await collectLocalResearch(input);
 
-        const { data: latest } = await supabaseAdmin
+        const { data: historyRows } = await supabaseAdmin
           .from("monitoring_snapshots")
           .select("snapshot")
           .eq("user_id", profile.id)
           .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const previous = latest ? parseResearchSnapshot(latest.snapshot) : null;
+          .limit(8);
+        const parsedHistory = (historyRows ?? [])
+          .reverse()
+          .map((row) => parseResearchSnapshot(row.snapshot))
+          .filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
+        const previous = parsedHistory[parsedHistory.length - 1] ?? null;
         const changes = detectChanges(previous, research);
 
-        const generated = await writeBrief({ input, research, changes });
+        const generated = await writeBrief({
+          input,
+          research,
+          changes,
+          analysis: buildMarketAnalysis(research, parsedHistory, profile.price_point ?? null),
+        });
 
         await supabaseAdmin.from("monitoring_snapshots").insert({
           user_id: profile.id,

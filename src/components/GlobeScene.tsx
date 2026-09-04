@@ -16,6 +16,11 @@ export type GlobeState = {
   markVisible: boolean;
 };
 
+/** One business mark on the globe: a stable longitude in sphere space. The
+ *  active business mark pops and glows amber; the rest read as small dim
+ *  points, each at its own longitude. */
+export type GlobeMark = { id: string; lon: number };
+
 /* ---------- study constants (warm ink-and-paper palette) ---------- */
 
 const FACE =
@@ -90,6 +95,8 @@ export function GlobeScene({
   onMarkClick,
   startRevealed = false,
   focusTriggerRef,
+  marks = [],
+  activeMarkId = null,
 }: {
   /** Receives the globe's live center + limb radius every frame. */
   stateRef: React.MutableRefObject<GlobeState>;
@@ -112,6 +119,12 @@ export function GlobeScene({
   /** Increment to ask the globe to rotate so the revealed mark faces the
    *  front again (used when a business is selected from the nav dropdown). */
   focusTriggerRef?: React.MutableRefObject<number>;
+  /** One mark per business, each at its own longitude. The active one pops
+   *  and glows amber; the rest read as small dim points. */
+  marks?: GlobeMark[];
+  /** Which business mark is active — highlighted, and the callout box below
+   *  it anchors to its live position. */
+  activeMarkId?: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -121,10 +134,14 @@ export function GlobeScene({
   const latestRef = useRef<{
     holdStill: boolean;
     onMarkClick?: (() => void) | undefined;
-  }>({ holdStill: false, onMarkClick: undefined });
+    marks: GlobeMark[];
+    activeMarkId: string | null;
+  }>({ holdStill: false, onMarkClick: undefined, marks: [], activeMarkId: null });
   useEffect(() => {
     latestRef.current.holdStill = holdStill;
     latestRef.current.onMarkClick = onMarkClick ?? undefined;
+    latestRef.current.marks = marks ?? [];
+    latestRef.current.activeMarkId = activeMarkId ?? null;
   });
 
   useEffect(() => {
@@ -206,15 +223,13 @@ export function GlobeScene({
       done: false,
       t: 0,
       startSpin: 0,
-      markLon: 0,
       popT: 0,
     };
     if (startRevealed) {
-      // A business already exists: skip the sweep and land the mark on the
-      // front, fully popped, as if the reveal had just completed.
+      // A business already exists: skip the sweep and show its mark fully
+      // popped, as if the reveal had just completed.
       reveal.done = true;
       reveal.popT = 1;
-      reveal.markLon = Math.PI / 2 - spin;
     }
     /* focus rotation: spin (at most half a turn) so the mark faces the front */
     const focus = { active: false, target: 0, dir: 1, remaining: 0 };
@@ -222,10 +237,14 @@ export function GlobeScene({
     let lastFocusTrigger = 0;
 
     const startFocus = () => {
-      if (!reveal.done) return; // nothing to bring to the front yet
-      // The mark sits dead centre of the disc when cos(markLon + spin) = 0
-      // (x1 = 0), i.e. spin = pi/2 - markLon — the front meridian.
-      const target = Math.PI / 2 - reveal.markLon;
+      if (!reveal.done) return; // no marks to bring to the front yet
+      const marks = latestRef.current.marks;
+      const active =
+        marks.find((m) => m.id === latestRef.current.activeMarkId) ?? marks[0];
+      if (!active) return;
+      // A mark sits dead centre of the disc when cos(lon + spin) = 0
+      // (x1 = 0), i.e. spin = pi/2 - lon — the front meridian.
+      const target = Math.PI / 2 - active.lon;
       const delta = Math.atan2(
         Math.sin(target - spin),
         Math.cos(target - spin)
@@ -239,9 +258,6 @@ export function GlobeScene({
     const startReveal = () => {
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       reveal.startSpin = spin;
-      // The mark lands dead centre of the disc (x1 = 0) when the sweep
-      // finishes: markLon + (startSpin + 2pi) = pi/2.
-      reveal.markLon = Math.PI / 2 - spin;
       reveal.t = 0;
       reveal.popT = 0;
       if (reduced) {
@@ -327,11 +343,12 @@ export function GlobeScene({
         reveal.t += dt / REVEAL_MS;
         if (reveal.t >= 1) {
           reveal.t = 1;
-          spin = reveal.startSpin + Math.PI * 2; // land the mark dead front
+          spin = reveal.startSpin + Math.PI * 2; // one full turn, then settle
           vel = 0;
           reveal.active = false;
           reveal.done = true;
           reveal.popT = 0;
+          startFocus(); // bring the new business mark to the front
         } else {
           spin += REVEAL_SPEED * (dt / 1000);
         }
@@ -490,20 +507,35 @@ export function GlobeScene({
       }
       ctx.globalAlpha = 1;
 
-      /* the business mark: pops onto the front after the sweep, then stays as
-         a live anchor for the page's callout box below it */
+      /* the business marks: one amber diamond per business, each at its own
+         longitude. The active one pops with a halo and breathing ring after
+         the sweep and stays a live anchor for the page callout box below
+         it; the rest read as small dim amber points. */
       if (reveal.done) {
         const mlat = (MARK_LAT * Math.PI) / 180;
-        const x0 = Math.cos(mlat) * Math.cos(reveal.markLon);
-        const y0 = Math.sin(mlat);
-        const z0 = Math.cos(mlat) * Math.sin(reveal.markLon);
-        const x1 = x0 * cs - z0 * sn;
-        const z1 = x0 * sn + z0 * cs;
-        const y2 = y0 * ct - z1 * st;
-        const z2 = y0 * st + z1 * ct;
-        if (z2 > 0.02) {
+        const marks = latestRef.current.marks;
+        const activeId = latestRef.current.activeMarkId;
+        let drewActive = false;
+        for (const mark of marks) {
+          const x0 = Math.cos(mlat) * Math.cos(mark.lon);
+          const y0 = Math.sin(mlat);
+          const z0 = Math.cos(mlat) * Math.sin(mark.lon);
+          const x1 = x0 * cs - z0 * sn;
+          const z1 = x0 * sn + z0 * cs;
+          const y2 = y0 * ct - z1 * st;
+          const z2 = y0 * st + z1 * ct;
+          if (z2 <= 0.02) continue; // hidden behind the sphere
           const mpx = cx + x1 * R;
           const mpy = cy - y2 * R;
+          if (mark.id !== activeId) {
+            // another business — a small dim amber point
+            ctx.fillStyle = `rgba(${ACCENT}, 0.5)`;
+            ctx.beginPath();
+            ctx.arc(mpx, mpy, 3, 0, Math.PI * 2);
+            ctx.fill();
+            continue;
+          }
+          drewActive = true;
           stRef.markX = mpx;
           stRef.markY = mpy;
           stRef.markVisible = true;
@@ -537,9 +569,8 @@ export function GlobeScene({
           ctx.beginPath();
           ctx.arc(mpx, mpy, Math.max(0.001, 1.8 * p), 0, Math.PI * 2);
           ctx.fill();
-        } else {
-          stRef.markVisible = false;
         }
+        if (!drewActive) stRef.markVisible = false;
       } else {
         stRef.markVisible = false;
       }

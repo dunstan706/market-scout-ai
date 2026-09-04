@@ -210,3 +210,119 @@ describe("changesToBriefSignals", () => {
     expect(entry?.tone).toBe("amber");
   });
 });
+
+describe("detectChanges — own listing", () => {
+  function listing(overrides: Partial<NonNullable<ResearchSnapshot["ownListing"]>> = {}) {
+    return { name: "Radiance Salon", ...overrides };
+  }
+
+  function ownSnapshot(
+    own?: NonNullable<ResearchSnapshot["ownListing"]>,
+    capturedAt = "2026-09-01T08:00:00.000Z",
+  ): ResearchSnapshot {
+    return {
+      location: { displayName: "Shoreditch, London", latitude: 51.52, longitude: -0.08 },
+      competitors: [glow()],
+      ownListing: own,
+      sources: [{ label: "Google Places", url: "https://maps.google.com/", kind: "reviews" }],
+      warnings: [],
+      capturedAt,
+    };
+  }
+
+  it("reports nothing about the own listing on the baseline run", () => {
+    expect(detectChanges(null, ownSnapshot(listing()))).toEqual([]);
+  });
+
+  it("flags a fall in your own rating as red", () => {
+    const changes = detectChanges(
+      ownSnapshot(listing({ rating: 4.8 })),
+      ownSnapshot(listing({ rating: 4.6 }), "2026-09-08T08:00:00.000Z"),
+    );
+    const own = changes.find((c) => c.kind === "own_listing");
+    expect(own?.tone).toBe("red");
+    expect(own?.headline).toBe("Your rating fell to 4.6/5");
+    expect(own?.detail).toContain("4.8 → 4.6");
+  });
+
+  it("greets a rise in your own rating", () => {
+    const changes = detectChanges(
+      ownSnapshot(listing({ rating: 4.6 })),
+      ownSnapshot(listing({ rating: 4.9 }), "2026-09-08T08:00:00.000Z"),
+    );
+    expect(changes.find((c) => c.kind === "own_listing")?.tone).toBe("green");
+    expect(changes.find((c) => c.kind === "own_listing")?.headline).toBe("Your rating rose to 4.9/5");
+  });
+
+  it("reports review-count growth on your listing", () => {
+    const changes = detectChanges(
+      ownSnapshot(listing({ reviewCount: 120 })),
+      ownSnapshot(listing({ reviewCount: 132 }), "2026-09-08T08:00:00.000Z"),
+    );
+    const own = changes.find((c) => c.kind === "own_listing");
+    expect(own?.headline).toBe("Your listing now shows 132 ratings");
+    expect(own?.detail).toContain("+12 since the last scan");
+  });
+
+  it("surfaces genuinely new reviews with a star-based tone", () => {
+    const before = ownSnapshot(listing({ reviews: [{ rating: 5, text: "Amazing every time." }] }));
+    const after = ownSnapshot(
+      listing({
+        reviews: [
+          { rating: 5, text: "Amazing every time." },
+          { rating: 1, text: "Waited forty minutes." },
+          { rating: 4, text: "Great cut." },
+        ],
+      }),
+      "2026-09-08T08:00:00.000Z",
+    );
+    const changes = detectChanges(before, after);
+    const oneStar = changes.find((c) => c.headline.includes("1★"));
+    expect(oneStar?.tone).toBe("red");
+    expect(oneStar?.detail).toContain("Waited forty minutes.");
+    const fourStar = changes.find((c) => c.headline.includes("4★"));
+    expect(fourStar?.tone).toBe("green");
+    // The unchanged review is not re-reported.
+    expect(changes.filter((c) => c.kind === "own_listing")).toHaveLength(2);
+  });
+
+  it("ignores own listing when neither snapshot has one", () => {
+    expect(detectChanges(snapshot([glow()]), snapshot([glow()]))).toEqual([]);
+  });
+});
+
+describe("parseResearchSnapshot — own listing round-trip", () => {
+  it("preserves the own listing through JSON storage", () => {
+    const stored = {
+      location: { displayName: "Shoreditch, London", latitude: 51.52, longitude: -0.08 },
+      competitors: [],
+      ownListing: {
+        name: "Radiance Salon",
+        rating: 4.8,
+        reviewCount: 31,
+        url: "https://maps.google.com/?cid=1",
+        reviews: [{ rating: 5, text: "Lovely." }],
+      },
+      sources: [],
+      warnings: [],
+      capturedAt: "2026-09-01T08:00:00.000Z",
+    };
+    const parsed = parseResearchSnapshot(JSON.parse(JSON.stringify(stored)));
+    expect(parsed?.ownListing?.name).toBe("Radiance Salon");
+    expect(parsed?.ownListing?.reviews?.[0]?.text).toBe("Lovely.");
+  });
+
+  it("still parses older snapshots without an own listing", () => {
+    const parsed = parseResearchSnapshot(JSON.parse(JSON.stringify(snapshot([glow()]))));
+    expect(parsed?.ownListing).toBeUndefined();
+    expect(parsed?.competitors[0]?.name).toBe("Glow Studio");
+  });
+
+  it("parses own_listing detected changes", () => {
+    const parsed = parseDetectedChanges([
+      { tone: "green", kind: "own_listing", headline: "Your rating rose to 4.9/5", detail: "D" },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.kind).toBe("own_listing");
+  });
+});

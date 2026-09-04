@@ -61,6 +61,12 @@ back up.
         "Add a new Business" button **stays visible** and routes to an
         **upgrade/plan page** — build that page later (see Stripe item
         above); it's where the $15/$50/Enterprise tiers get presented.
+- [ ] **Plans and Profile pages for the globe dashboard** — the nav pill
+      `Plans` and `Profile` items still point at the old `/dashboard`; build
+      real `/plans` (presents the $15 / $50 / Enterprise tiers — the upgrade
+      page the multi-business flow routes to) and `/profile` (account
+      details, email, sign-out) in the new ink-and-constellation aesthetic,
+      then point the nav targets at them.
 - [ ] The owner's own review signal — the "green" opportunity signal about
       *their* business, not just competitors.
 - [ ] Watching for brand-new buildings / closures — intentionally not claimed

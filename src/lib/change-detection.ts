@@ -8,7 +8,7 @@ export type ChangeTone = "red" | "amber" | "green";
 
 export type DetectedChange = {
   tone: ChangeTone;
-  kind: "price" | "reviews" | "hours" | "new_entry";
+  kind: "price" | "reviews" | "hours" | "new_entry" | "own_listing";
   headline: string;
   detail: string;
   competitorName?: string | undefined;
@@ -17,7 +17,7 @@ export type DetectedChange = {
 
 export const DetectedChangeSchema = z.object({
   tone: z.enum(["red", "amber", "green"]),
-  kind: z.enum(["price", "reviews", "hours", "new_entry"]),
+  kind: z.enum(["price", "reviews", "hours", "new_entry", "own_listing"]),
   headline: z.string(),
   detail: z.string(),
   competitorName: z.string().optional(),
@@ -43,6 +43,24 @@ export const ResearchSnapshotSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
   }),
+  ownListing: z
+    .object({
+      name: z.string(),
+      rating: z.number().optional(),
+      reviewCount: z.number().optional(),
+      url: z.string().optional(),
+      address: z.string().optional(),
+      reviews: z
+        .array(
+          z.object({
+            rating: z.number().optional(),
+            text: z.string().optional(),
+            author: z.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   competitors: z.array(
     z.object({
       name: z.string(),
@@ -322,6 +340,62 @@ export function detectChanges(
     }
   }
 
+  // Your own listing — reputation drift on your own door matters more than a
+  // competitor move, so it is reported alongside the field (kind
+  // "own_listing"). Only fires once a baseline with an own listing exists.
+  if (previous.ownListing && current.ownListing) {
+    const beforeOwn = previous.ownListing;
+    const afterOwn = current.ownListing;
+    const source = "Google Places";
+    if (
+      beforeOwn.rating !== undefined &&
+      afterOwn.rating !== undefined &&
+      Math.abs(afterOwn.rating - beforeOwn.rating) >= MIN_RATING_DELTA
+    ) {
+      const improved = afterOwn.rating > beforeOwn.rating;
+      push({
+        tone: improved ? "green" : "red",
+        kind: "own_listing",
+        competitorName: afterOwn.name,
+        sourceLabel: source,
+        headline: `Your rating ${improved ? "rose" : "fell"} to ${afterOwn.rating.toFixed(1)}/5`,
+        detail: `${beforeOwn.rating.toFixed(1)} → ${afterOwn.rating.toFixed(1)} · source: ${source}`,
+      });
+    }
+    if (
+      beforeOwn.reviewCount !== undefined &&
+      afterOwn.reviewCount !== undefined &&
+      afterOwn.reviewCount !== beforeOwn.reviewCount
+    ) {
+      const delta = afterOwn.reviewCount - beforeOwn.reviewCount;
+      if (Math.abs(delta) >= 1) {
+        push({
+          tone: delta > 0 ? "green" : "red",
+          kind: "own_listing",
+          competitorName: afterOwn.name,
+          sourceLabel: source,
+          headline: `Your listing now shows ${afterOwn.reviewCount} ratings`,
+          detail: `${delta > 0 ? "+" : ""}${delta} since the last scan · source: ${source}`,
+        });
+      }
+    }
+    const knownTexts = new Set((beforeOwn.reviews ?? []).map((r) => r.text ?? "").filter(Boolean));
+    for (const review of afterOwn.reviews ?? []) {
+      if (!review.text) continue;
+      if (knownTexts.has(review.text)) continue;
+      knownTexts.add(review.text);
+      const stars = review.rating ?? 0;
+      push({
+        tone: stars <= 2 ? "red" : stars === 3 ? "amber" : "green",
+        kind: "own_listing",
+        competitorName: afterOwn.name,
+        sourceLabel: source,
+        headline: `New ${stars ? `${stars}★ ` : ""}review on your listing`,
+        detail: `“${review.text.slice(0, 140)}” · source: ${source}`,
+      });
+    }
+  }
+
   // Most important first: red threats, then everything else, newest area
   // entries before attribute drift so a market change isn't buried.
   const rank = (change: DetectedChange) =>
@@ -344,6 +418,7 @@ const KIND_LABELS: Record<DetectedChange["kind"], string> = {
   reviews: "Reviews",
   hours: "Hours",
   new_entry: "New in area",
+  own_listing: "Your business",
 };
 
 export function changesToBriefSignals(changes: DetectedChange[]): BriefSignal[] {

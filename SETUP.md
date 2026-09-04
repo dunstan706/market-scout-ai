@@ -145,6 +145,15 @@ alter table public.waitlist_signups add column user_id uuid references auth.user
 create index waitlist_signups_user_id_idx on public.waitlist_signups (user_id);
 ```
 
+### Block 4 — optional "your price" column (skip = app degrades gracefully)
+
+```sql
+-- Unlocks price-position analysis ("you are the 3rd cheapest of 9 publishing
+-- prices"). If skipped, everything else still works — saves simply omit the
+-- column and the dashboard shows a nudge instead of a price rank.
+alter table public.profiles add column if not exists price_point text;
+```
+
 Sanity check (all four must return table names, not NULL):
 
 ```sql

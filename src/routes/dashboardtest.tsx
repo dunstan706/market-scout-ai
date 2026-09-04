@@ -4,7 +4,8 @@ import { Expand, Plus, X } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { BriefCard, type Signal } from "@/components/BriefCard";
-import { GlobeScene, type GlobeState } from "@/components/GlobeScene";
+import { MarketSnapshot } from "@/components/MarketSnapshot";
+import { GlobeScene, type GlobeMark, type GlobeState } from "@/components/GlobeScene";
 import { AnimatedNavFramer, type AnimatedNavItem } from "@/components/ui/animated-nav-framer";
 import { ConstellationGrid } from "@/components/ConstellationGrid";
 import {
@@ -56,6 +57,7 @@ const EMPTY_STATUS: MonitoringStatus = {
   baseline: true,
   snapshotCount: 0,
   changes: [],
+  analysis: null,
 };
 
 const TONE_DOT: Record<DetectedChange["tone"], string> = {
@@ -130,6 +132,7 @@ function DashboardTestPage() {
     businessName: "",
     businessType: "salon",
     location: "",
+    pricePoint: "",
   });
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
@@ -205,6 +208,19 @@ function DashboardTestPage() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [scanOpen]);
 
+  // Escape closes the run-a-scan box (small or expanded).
+  useEffect(() => {
+    if (!scanOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setScanOpen(false);
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [scanOpen]);
+
   // Dev aids: expose the live warp radius and a reveal trigger for verification.
   useEffect(() => {
     const id = setInterval(() => {
@@ -222,10 +238,24 @@ function DashboardTestPage() {
     w["__focus"] = () => {
       focusTriggerRef.current += 1;
     };
+    // Dev aid: simulate a synced business so the mark flow can be exercised
+    // locally without auth (never reachable from the UI).
+    w["__devBusiness"] = () => {
+      setBusinesses([
+        {
+          id: "dev-business",
+          businessName: "Test Salon",
+          businessType: "salon",
+          location: "Shoreditch, London",
+        },
+      ]);
+      setActiveId("dev-business");
+    };
     return () => {
       clearInterval(id);
       delete w["__reveal"];
       delete w["__focus"];
+      delete w["__devBusiness"];
     };
   }, []);
 
@@ -236,6 +266,13 @@ function DashboardTestPage() {
   // dismisses it while the globe is holding still under it.
   const activeBusiness = businesses.find((b) => b.id === activeId) ?? businesses[0] ?? null;
   const changeCount = latestChanges.length > 0 ? latestChanges.length : status.changes.length;
+
+  // Each business gets its own longitude on the globe: the first sits dead
+  // front at the globe resting spin, the rest spread evenly around.
+  const marks: GlobeMark[] = businesses.map((b, i) => ({
+    id: b.id,
+    lon: Math.PI / 2 - 2.1 + (i * Math.PI * 2) / Math.max(1, businesses.length),
+  }));
 
   // Load monitoring status + stored briefs whenever the panel expands.
   useEffect(() => {
@@ -266,6 +303,7 @@ function DashboardTestPage() {
       businessName: activeBusiness.businessName,
       businessType: activeBusiness.businessType,
       location: activeBusiness.location,
+      pricePoint: activeBusiness.pricePoint ?? "",
     });
   }, [activeBusiness?.id]);
 
@@ -464,12 +502,14 @@ function DashboardTestPage() {
           stateRef={globeStateRef}
           revealTriggerRef={revealTriggerRef}
           focusTriggerRef={focusTriggerRef}
-        holdStill={scanOpen}
-        onMarkClick={() => {
-          setScanOpen(true);
-          setExpanded(false); // pressing the mark returns to the small box
-        }}
-        startRevealed={businesses.length > 0}
+          holdStill={scanOpen}
+          onMarkClick={() => {
+            setScanOpen(true);
+            setExpanded(false); // pressing the mark returns to the small box
+          }}
+          startRevealed={businesses.length > 0}
+          marks={marks}
+          activeMarkId={activeId}
           className="fixed inset-0 h-screen w-full"
         />
       )}
@@ -616,6 +656,15 @@ function DashboardTestPage() {
                       setDetailDraft({ ...detailDraft, location: e.target.value })
                     }
                   />
+                  <input
+                    className={inputCls}
+                    name="pricePoint"
+                    maxLength={40}
+                    placeholder="Your typical price (optional) — e.g. $45"
+                    aria-label="Your typical price"
+                    value={detailDraft.pricePoint ?? ""}
+                    onChange={(e) => setDetailDraft({ ...detailDraft, pricePoint: e.target.value })}
+                  />
                   <select
                     className={inputCls}
                     name="businessType"
@@ -648,6 +697,14 @@ function DashboardTestPage() {
               {scanTab === "monitoring" && (
                 <div className="space-y-4 p-4">
                   <p className="eyebrow">Monitoring</p>
+                  {status.analysis && (
+                    <div className="rounded-md border border-rule/70 bg-card/40 p-3.5">
+                      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                        Market snapshot
+                      </p>
+                      <MarketSnapshot analysis={status.analysis} className="mt-2.5" />
+                    </div>
+                  )}
                   {status.lastRunAt ? (
                     <p className="text-xs text-muted-foreground">
                       Last scan {new Date(status.lastRunAt).toLocaleDateString()} ·{" "}
