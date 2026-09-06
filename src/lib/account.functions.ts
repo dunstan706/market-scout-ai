@@ -498,6 +498,66 @@ export const getMonitoringStatus = createServerFn({ method: "POST" })
     };
   });
 
+// Sends the signed-in user a sample of the weekly brief email — the fastest
+// way to verify Resend delivery (key, verified sender, spam filters) without
+// waiting for the real cron run or spending a research cycle. Renders the
+// exact email template with a fixed example brief, addressed to their account.
+export const sendTestBriefEmail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async ({ context }): Promise<{ ok: boolean; error?: string }> => {
+      const userId = context.userId;
+      const { data: profileRow } = await context.supabase
+        .from("profiles")
+        .select("business_name, location")
+        .eq("id", userId)
+        .maybeSingle();
+      // The auth-scoped client has no persisted session, so the account email
+      // comes from an admin lookup (same pattern as the cron / waitlist claim).
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: authRow } = await supabaseAdmin.auth.admin.getUserById(userId);
+      const email = authRow?.user?.email;
+      if (!email) {
+        return { ok: false, error: "No email address found on your account." };
+      }
+      const businessName = (profileRow?.business_name as string | null) ?? "Your business";
+      const location = (profileRow?.location as string | null) ?? "your neighbourhood";
+
+      // Dynamic import keeps the email + Resend code out of the client bundle.
+      const { renderBriefEmail, sendEmail } = await import("@/lib/email.server");
+      const { subject, html, text } = renderBriefEmail({
+        title: `${businessName}, ${location}`,
+        signals: [
+          {
+            tone: "amber",
+            label: "Sample signal",
+            headline: "A competitor nearby changed a price",
+            detail: "This is what a real signal will look like in your weekly brief.",
+          },
+          {
+            tone: "green",
+            label: "Sample signal",
+            headline: "A new positive review mentions your service",
+            detail: "Real reviews, ratings and sentiment summaries appear here.",
+          },
+          {
+            tone: "red",
+            label: "Sample signal",
+            headline: "Something needs your attention",
+            detail: "Important moves are ranked and explained in plain language.",
+          },
+        ],
+        recommendation: "This is a test email — your real weekly brief will arrive every Monday morning.",
+        why: "The email below uses the exact template Localscope sends for real briefs.",
+        sources: [{ label: "Localscope test", url: "https://localscope.lovable.app" }],
+        dashboardUrl: "https://localscope.lovable.app/dashboard",
+      });
+      const sent = await sendEmail({ to: email, subject, html, text });
+      if (!sent.ok) return { ok: false, error: sent.error };
+      return { ok: true };
+    },
+  );
+
 export const listBriefs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ briefs: BriefRecord[] }> => {

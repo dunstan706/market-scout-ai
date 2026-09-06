@@ -12,6 +12,8 @@ Dashboard and the Lovable preview.
 | `SUPABASE_SERVICE_ROLE_KEY` | Auto-managed (reserved prefix) | Lovable: More → Cloud → Secrets (marked "Lovable") |
 | `LOVABLE_API_KEY` | Auto-managed (reserved prefix) | Lovable: More → Cloud → Secrets (marked "Lovable") |
 | `LOVABLE_CRON_SECRET` | Needed only for the weekly run | Lovable: More → Cloud → Secrets |
+| `RESEND_API_KEY` | Needed for weekly email delivery | Lovable: More → Cloud → Secrets |
+| `RESEND_FROM` | Verified sender for brief emails | Lovable: More → Cloud → Secrets |
 
 Private keys always go in **Secrets**, never in `.env`. The committed
 `.env` holds only public `VITE_*` values and must stay committed —
@@ -178,16 +180,53 @@ select to_regclass('public.waitlist_signups'),
 Optional: join the waitlist with the same email you used to sign up, then check
 the dashboard pre-fills from your waitlist row (waitlist → account claim).
 
-## Step 3 — Weekly automation (when you're ready)
+## Step 3 — Weekly email delivery (enable + verify)
 
-Email delivery is currently **on hold** (see `TODO.md`). The plumbing exists:
-the cron endpoint runs the full monitoring cycle for every saved profile and
-reports `processed` / `emailed` / `failed` as JSON. To activate:
+The email plumbing is written and tested: the cron endpoint runs the full
+monitoring cycle for every saved profile and reports
+`processed` / `emailed` / `failed` as JSON. Activating delivery takes four
+your-side actions:
 
-1. Add `LOVABLE_CRON_SECRET` in Lovable Secrets.
-2. Trigger once to test: POST `/api/cron/run-monitoring` with header
-   `Authorization: Bearer $LOVABLE_CRON_SECRET`.
-3. Configure your scheduler (e.g. Monday 08:00) to hit that endpoint.
+### 1. Set up Resend (5 minutes)
+
+1. Create a free account at **resend.com** (or use your existing one).
+2. **Verify a domain** (Domains → Add Domain) — needed so briefs send from
+your own address instead of Resend's test domain. If you only want to test
+now, you can skip verification and send **to your own account email** from
+`onboarding@resend.dev`, but verified-domain sending is what production
+users will see.
+3. Create an **API key** (API Keys → Create) and copy it.
+
+### 2. Add the secrets in Lovable (More → Cloud → Secrets)
+
+| Secret | Value |
+|---|---|
+| `RESEND_API_KEY` | `re_…` from step 1 |
+| `RESEND_FROM` | Verified sender, e.g. `Localscope <briefs@yourdomain.com>` |
+| `LOVABLE_CRON_SECRET` | A long random string (used by the scheduler) |
+
+Private keys always go in **Secrets**, never in `.env`.
+
+### 3. Verify delivery with a test brief (no research cost)
+
+Log in → **Profile** → **"Email me a test brief"**. If the secrets are
+right, the exact weekly email (same template the cron sends) lands in your
+inbox within seconds. The button reports a friendly error when a secret is
+missing or the sender is unverified — fix the message it shows and retry.
+
+### 4. Trigger the real weekly run, then schedule it
+
+```bash
+# One manual run — processes every saved profile with a business + location:
+curl -X POST https://localscope.lovable.app/api/cron/run-monitoring \
+  -H "Authorization: Bearer $LOVABLE_CRON_SECRET"
+# → {"ok":true,"processed":N,"emailed":N,"failed":[]}
+```
+
+Then point your scheduler (GitHub Actions cron, cron-job.org, UptimeRobot,
+Cloudflare Workers, etc.) at that same URL+header on **Monday ~08:00**. The
+cron marks each brief `emailed_at` after sending, so retries never
+double-send.
 
 ## Troubleshooting
 

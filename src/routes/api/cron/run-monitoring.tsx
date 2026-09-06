@@ -83,7 +83,11 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
           location,
         };
 
-        const research = await collectLocalResearch(input);
+        // Full mode: the weekly mail is where the Watch tier's richer,
+        // multi-source picture (Google + OSM + Foursquare + Geoapify +
+        // Overture) is meant to land. User-initiated scans stay on the
+        // conservative "preview" mode by default.
+        const research = await collectLocalResearch(input, { mode: "full" });
 
         const { data: historyRows } = await supabaseAdmin
           .from("monitoring_snapshots")

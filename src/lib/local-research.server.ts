@@ -1,4 +1,5 @@
 import { cacheGet, cacheSet } from "@/lib/cache.server";
+import { collectSecondarySources, WEEKLY_MAIL_NOTE, type SecondaryMode } from "@/lib/research-sources.server";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const OVERPASS_URLS = [
@@ -181,7 +182,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
+export function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const earthRadius = 6_371_000;
   const radians = (value: number) => (value * Math.PI) / 180;
   const deltaLat = radians(bLat - aLat);
@@ -662,11 +663,15 @@ function mergeDirectoryLists(primary: ResearchCompetitor[], extra: ResearchCompe
   return result;
 }
 
-export async function collectLocalResearch(input: {
-  businessName: string;
-  location: string;
-  businessType: string;
-}): Promise<ResearchSnapshot> {
+export async function collectLocalResearch(
+  input: {
+    businessName: string;
+    location: string;
+    businessType: string;
+  },
+  options?: { mode?: SecondaryMode },
+): Promise<ResearchSnapshot> {
+  const mode = options?.mode ?? "preview";
   const resolvedLocation = await geocode(input.location);
   const warnings: string[] = [];
   const sources: ResearchSource[] = [];
@@ -726,7 +731,34 @@ export async function collectLocalResearch(input: {
   }
   sources.push({ label: "OpenStreetMap", url: "https://www.openstreetmap.org/", kind: "directory" });
 
-  const competitors = mergeCompetitors(googleCompetitors, osmCompetitors);
+  let competitors = mergeCompetitors(googleCompetitors, osmCompetitors);
+
+  // Watch-tier secondary sources (Foursquare, Geoapify, Overture) run after the
+  // primary pass. Preview (user-initiated scans) is conservative — one call per
+  // source, capped results, cached; full (the weekly mail cron) pulls the
+  // richest allowed picture. Extra coverage is deduped against the primary list
+  // so a place found by three sources still appears once.
+  const secondary = await collectSecondarySources(resolvedLocation, input.businessType, mode);
+  const mergedCompetitors = mergeDirectoryLists(competitors, secondary.competitors);
+  // Preview stays tight (the brief is a teaser); full gets a wider field but a
+  // sane ceiling so prompts and the mail don't drown in listings.
+  competitors = (mode === "full" ? mergedCompetitors : mergedCompetitors.slice(0, 15)).slice(0, 24);
+  for (const label of secondary.sourceLabels) {
+    const url =
+      label === "Foursquare Places"
+        ? "https://foursquare.com/"
+        : label === "Geoapify Places"
+          ? "https://www.geoapify.com/"
+          : "https://overturemaps.org/";
+    if (!sources.some((source) => source.label === label)) {
+      sources.push({ label, url, kind: "directory" });
+    }
+  }
+  warnings.push(...secondary.warnings);
+  // Every user-initiated generation points at the richer weekly mail. Not added
+  // in full mode — the weekly mail is that richer result.
+  if (mode === "preview") warnings.push(WEEKLY_MAIL_NOTE);
+
   const websiteCandidates = competitors.filter((competitor) => competitor.website).slice(0, 6);
   const websiteResults = await Promise.allSettled(
     websiteCandidates.map(async (competitor) => ({

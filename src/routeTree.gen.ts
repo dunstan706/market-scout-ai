@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DashboardtestRouteImport } from './routes/dashboardtest'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiCronRunMonitoringRouteImport } from './routes/api/cron/run-monitoring'
@@ -43,6 +44,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
+  '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
+  '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
+  '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/dashboardtest'
     | '/login'
     | '/privacy'
+    | '/profile'
     | '/signup'
     | '/terms'
     | '/api/cron/run-monitoring'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/dashboardtest'
     | '/login'
     | '/privacy'
+    | '/profile'
     | '/signup'
     | '/terms'
     | '/api/cron/run-monitoring'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/dashboardtest'
     | '/login'
     | '/privacy'
+    | '/profile'
     | '/signup'
     | '/terms'
     | '/api/cron/run-monitoring'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   DashboardtestRoute: typeof DashboardtestRoute
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
+  ProfileRoute: typeof ProfileRoute
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
   ApiCronRunMonitoringRoute: typeof ApiCronRunMonitoringRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardtestRoute: DashboardtestRoute,
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,
+  ProfileRoute: ProfileRoute,
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
   ApiCronRunMonitoringRoute: ApiCronRunMonitoringRoute,

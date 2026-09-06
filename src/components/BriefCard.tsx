@@ -72,9 +72,13 @@ export function BriefCard({
             ))}
           </div>
           {warnings && warnings.length > 0 && (
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Coverage note: {warnings[0]}
-            </p>
+            <div className="mt-3 space-y-1">
+              {warnings.map((warning) => (
+                <p key={warning} className="text-xs leading-relaxed text-muted-foreground">
+                  {warning}
+                </p>
+              ))}
+            </div>
           )}
         </div>
       )}

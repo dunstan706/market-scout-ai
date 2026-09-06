@@ -83,12 +83,77 @@ back up.
       keys go in Lovable Secrets (More → Cloud → Secrets), never in `.env`.
       The tracked file holds only publishable Supabase values today.
 
-## On hold — Resend email delivery (set aside for now)
+## Weekly email delivery — code done, activation is yours
 
-- [ ] Set `RESEND_API_KEY` and verify a `RESEND_FROM` sender in Resend.
-- [ ] Trigger the cron endpoint once and confirm a brief lands in an inbox.
-- [ ] Schedule the weekly job (e.g., Monday ~08:00) on the host.
-      (`.env.example` already documents `RESEND_API_KEY`, `RESEND_FROM`,
-      `LOVABLE_CRON_SECRET`; the cron endpoint already sends + stamps
-      `emailed_at` so retries never double-send — the code is done, only the
-      keys and schedule are missing.)
+The send path is implemented and unit-tested (`email.server.test.ts`):
+`renderBriefEmail` (escaping, tones, sources, text fallback) and `sendEmail`
+guards. A **"Email me a test brief"** button on `/profile` sends the exact
+weekly template to your account email so you can verify Resend keys/sender
+with zero research cost. `SETUP.md → Step 3` is the enable+verify runbook.
+
+- [ ] Add `RESEND_API_KEY` + `RESEND_FROM` (verified sender) in Lovable
+      Secrets (see SETUP.md Step 3).
+- [ ] Log in → Profile → **"Email me a test brief"** → confirm it lands
+      (check spam).
+- [ ] Trigger the cron once (`curl -X POST …/api/cron/run-monitoring -H
+      "Authorization: Bearer $LOVABLE_CRON_SECRET"`) and confirm a *real*
+      brief emails out.
+- [ ] Schedule the weekly job (e.g., Monday ~08:00) on the host. The cron
+      stamps `emailed_at`, so retries never double-send.
+- [ ] Tier the email experience once live (from the $50 pricing discussion):
+      weekly digest = the baseline for every paid tier; the $50 tier adds
+      **alert emails between digests** (e.g. a 1–3★ review lands on your own
+      listing, or your nearest competitor cuts its price). The plumbing
+      already exists — mark briefs `emailed_at`, cron per profile — so this
+      is copy + send rules, not new infrastructure.
+
+## Set aside — $50 tier plan (approved direction, NOT implemented)
+
+Decision from the pricing discussion: the $15 tier stays as-is (one business,
+weekly digest + market snapshot + basics). The **$50 tier is not just "5
+businesses"** — it's alerts-first: the same market briefs as $15, plus
+Localscope emails you the moment something important happens to *your*
+business between weekly digests. Agreed direction — build only after the $15
+loop is proven with real users.
+
+**The alert menu** (each maps to code already written):
+
+- **Your-listing alerts** (crown jewel): a new review ≤3★ on your own Google
+  listing → red alert with the quote and a "reply on Google" link. We already
+  fetch your listing's top 5 reviews every scan and diff them
+  (`own_listing` changes). ≥4★ reviews → gentle green note (group, don't
+  email individually).
+- **Competitor price-cut alerts**: any tracked competitor within a
+  configurable radius drops its entry price → alert (old → new values
+  already reported by `detectChanges`).
+- **New-entrant alerts**: a new business appears in your radius for the first
+  time → alert (only after a baseline exists).
+
+**Cadence is the real $15/$50 divider**: alerts fire on the next scan, so
+weekly scans make alerts up to 7 days late. $50 therefore implies a faster
+scan schedule (a few times a week, or daily if costs allow). Each scan is
+real money (Google Places + LLM) — the $50 price must absorb it. This is the
+one genuine infrastructure change: a per-account scan schedule, not just the
+single weekly cron.
+
+**Tier gating**: one flag on the profile row (`plan_tier`, when billing
+lands) — free/$15 = weekly digest only; $50 = alerts on + faster cadence.
+No new tables; emails already stamp `emailed_at`.
+
+**Delivery mechanics (reused)**: the cron route already renders a brief and
+sends it; alerts are a second, smaller email template ("market alert") sent
+from the same cron pass when `detected_changes` contains a qualifying
+change. One cron job, two templates.
+
+**Build order when picked up**: (1) Resend keys + weekly digest landing in an
+inbox (the prerequisite habit); (2) the ≤3★ own-review alert email template,
+sent from the cron when a scan detects one (manual test with a fake review
+first); (3) decide scan cadence for $50 and cost it out; (4) tier flag +
+gating; (5) pricing-page copy. Optional cheap add-on (defer): a "new since
+your last visit" marker in the dashboard so alerts feel alive without email.
+
+**Open questions to settle at build time**: is the ≤3★ own-review email the
+*only* alert in v1, or all three types at once? And does $50 implicitly
+promise faster scans (recurring cost the price must cover), or keep weekly
+cadence for everyone with best-effort alerts (weaker story, zero extra
+cost)?
