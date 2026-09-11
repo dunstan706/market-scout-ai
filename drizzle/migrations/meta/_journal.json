@@ -8,6 +8,13 @@
       "when": 1789138404613,
       "tag": "0000_ensure_profiles_google_place_id",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789143628483,
+      "tag": "0001_secure_waitlist_inserts",
+      "breakpoints": true
     }
   ]
 }
