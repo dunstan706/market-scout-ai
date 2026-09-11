@@ -7,7 +7,7 @@ export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
       { title: "Create your account — theBizScope" },
-      { name: "description", content: "Create a free theBizScope account for your salon or spa." },
+      { name: "description", content: "Create a theBizScope account for your salon or spa." },
     ],
   }),
   component: SignupPage,
@@ -50,7 +50,7 @@ function SignupPage() {
 
   return (
     <AuthLayout
-      eyebrow="Free early access"
+      eyebrow="Set up your market watch"
       title="Create your account."
       subtitle="Save your salon's details and generate briefs for your own neighbourhood."
       footer={
@@ -88,7 +88,7 @@ function SignupPage() {
           {loading ? "Creating account…" : "Create account"}
         </button>
         <p className="text-xs text-muted-foreground">
-          Free while theBizScope is in early access. No card required.
+          No card required to sign up — subscribe only when you're ready.
         </p>
       </form>
     </AuthLayout>

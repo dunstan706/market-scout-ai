@@ -6,9 +6,9 @@ import { startCheckout } from "@/lib/account.functions";
 
 // Pricing CTA for the landing page. Signed-in users get a real Paddle
 // checkout button (monthly cadence — the landing shows monthly prices);
-// logged-out visitors keep the "Join waitlist" anchor, which is the natural
-// next step for them. Renders nothing until the session is known so a
-// signed-in user never sees a misleading waitlist link.
+// logged-out visitors are sent to signup, which is the natural next step
+// for them. Renders nothing until the session is known so a signed-in
+// user never sees a misleading signup link.
 export function LandingPlanCta({
   tier,
   featured,

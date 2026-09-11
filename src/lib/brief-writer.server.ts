@@ -43,7 +43,7 @@ export function describeBriefError(error: unknown): string {
       case "rate_limited":
         return "We're generating a lot of briefs right now — try again in a minute.";
       case "paused":
-        return "The brief generator is temporarily paused. Please join the waitlist and we'll send yours by email.";
+        return "The brief generator is temporarily paused. Create an account and we'll deliver yours by email.";
       case "no_object":
         return "We couldn't assemble a brief just now. Please try again.";
       default:

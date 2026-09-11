@@ -13,6 +13,7 @@ import {
   claimWaitlistProfile,
   createBusiness,
   generateMonitoringBrief,
+  getBillingStatus,
   getMonitoringStatus,
   listBriefs,
   listBusinesses,
@@ -62,6 +63,7 @@ export function GlobeDashboard() {
   const addBusiness = useServerFn(createBusiness);
   const fetchBusinesses = useServerFn(listBusinesses);
   const claimProfile = useServerFn(claimWaitlistProfile);
+  const fetchBilling = useServerFn(getBillingStatus);
   const persistProfile = useServerFn(saveProfile);
   const fetchStatus = useServerFn(getMonitoringStatus);
   const fetchBriefs = useServerFn(listBriefs);
@@ -97,9 +99,12 @@ export function GlobeDashboard() {
   const [addState, setAddState] = useState<AddState>("idle");
   const [addError, setAddError] = useState("");
 
-  // Plans / upgrade overlay — opened from the + pill once the account has its
-  // one "watch"-tier business, or from the nav pill's Plans item.
+  // Plans / upgrade overlay — opened automatically for accounts without a
+  // paid subscription, from the + pill once the account has its one business,
+  // or from the nav pill's Plans item.
   const [pricingOpen, setPricingOpen] = useState(false);
+  // Why the overlay is up — the title adapts (choosing a plan vs. limit hit).
+  const [pricingReason, setPricingReason] = useState<"choose" | "limit">("limit");
 
   // The "run a scan" callout box: wanted after a business is added or when the
   // amber mark is clicked. While it is open the globe holds still; dismissing
@@ -172,6 +177,18 @@ export function GlobeDashboard() {
           setActiveId(first.id);
           setScanOpen(true); // mark + box up immediately
         }
+        // No paid subscription (free account, or a lapsed one) — surface the
+        // plans straight away, same overlay as the add-business limit. The
+        // user can dismiss it and still use everything their tier allows.
+        try {
+          const { status: billing } = await fetchBilling();
+          if (!cancelled && !billing.accessGranted) {
+            setPricingReason("choose");
+            setPricingOpen(true);
+          }
+        } catch {
+          // Billing check unavailable — never block the dashboard for it.
+        }
       } catch {
         // Signed-out, expired, or schema not ready — leave the globe pristine.
       } finally {
@@ -181,7 +198,7 @@ export function GlobeDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [fetchBusinesses, claimProfile]);
+  }, [fetchBusinesses, claimProfile, fetchBilling]);
 
   // Outside-click dismissal: only while the box is actually up (the reveal
   // sweep may still be playing, or the mark may be behind the sphere).
@@ -371,10 +388,10 @@ export function GlobeDashboard() {
   }
 
   function openAdd() {
-    // The "watch" tier (the only tier until billing lands) caps at one
-    // business: the + pill becomes an upgrade prompt once one exists. When
-    // billing lands, swap this check for the account's real plan tier.
+    // Every tier below Advise caps at one business: the + pill becomes the
+    // plans overlay once one exists.
     if (businesses.length >= 1) {
+      setPricingReason("limit");
       openPricing();
       return;
     }
@@ -947,14 +964,18 @@ export function GlobeDashboard() {
                 <p className="text-sm text-signal-red">{addError}</p>
               )}
               <p className="text-xs leading-relaxed text-muted-foreground">
-                The free plan includes one business. Paid plans (coming soon) let you watch more.
+                Includes one business. Upgrade any time to watch more.
               </p>
             </form>
           </div>
         </div>
       )}
 
-      <UpgradeOverlay open={pricingOpen} onClose={closePricing} />
+      <UpgradeOverlay
+        open={pricingOpen}
+        onClose={closePricing}
+        title={pricingReason === "choose" ? "Choose the plan that fits your business" : undefined}
+      />
     </main>
   );
 }

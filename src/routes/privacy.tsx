@@ -22,7 +22,7 @@ const SECTIONS: Array<[string, string]> = [
   ],
   [
     "What we collect",
-    "When you create an account we store your email address and the details of the business you want watched: its name, location, business type, and any contact details you add. To do the monitoring we also store what we find — snapshots of public information about competitors near you, like names, prices, ratings, review counts, and openings or closures. When you join the waitlist we store the email address you give us, plus the optional business details. When you generate a sample brief without an account, the inputs you type are used to run the research and aren't attached to a profile.",
+    "When you create an account we store your email address and the details of the business you want watched: its name, location, business type, and any contact details you add. To do the monitoring we also store what we find — snapshots of public information about competitors near you, like names, prices, ratings, review counts, and openings or closures. When you generate a sample brief without an account, the inputs you type are used to run the research and aren't attached to a profile.",
   ],
   [
     "Why we collect it",

@@ -10,6 +10,7 @@ import { UpgradeOverlay } from "@/components/UpgradeOverlay";
 import {
   claimWaitlistProfile,
   createBusiness,
+  getBillingStatus,
   listBusinesses,
   getMonitoringStatus,
   getSchemaStatus,
@@ -67,6 +68,7 @@ export function LegacyDashboard() {
   const persistProfile = useServerFn(saveProfile);
   const addBusiness = useServerFn(createBusiness);
   const claimProfile = useServerFn(claimWaitlistProfile);
+  const fetchBilling = useServerFn(getBillingStatus);
   const runMonitoring = useServerFn(generateMonitoringBrief);
   const fetchBriefs = useServerFn(listBriefs);
   const fetchStatus = useServerFn(getMonitoringStatus);
@@ -159,11 +161,19 @@ export function LegacyDashboard() {
       setBriefs(stored);
       setStatus(monitoring);
       setView("ready");
+      // No paid subscription — open the plans overlay once, after the screen
+      // has settled. Dismissible; the dashboard stays fully usable.
+      try {
+        const { status: billing } = await fetchBilling();
+        if (!billing.accessGranted) setPricingOpen(true);
+      } catch {
+        // Billing check unavailable — never block the dashboard for it.
+      }
     } catch {
       // Token missing/expired — treat as signed out so the user can log in again.
       setView("signedOut");
     }
-  }, [checkSchema, fetchBusinesses, fetchBriefs, fetchStatus, claimProfile]);
+  }, [checkSchema, fetchBusinesses, fetchBriefs, fetchStatus, claimProfile, fetchBilling]);
 
   useEffect(() => {
     void loadDashboard();
@@ -487,7 +497,7 @@ export function LegacyDashboard() {
                 </button>
                 {addError && <p className="text-sm text-signal-red">{addError}</p>}
                 <p className="text-xs text-muted-foreground">
-                  The free plan includes one business. Paid plans (coming soon) let you watch more.
+                  Includes one business. Upgrade any time to watch more.
                 </p>
               </form>
             </section>
@@ -497,10 +507,10 @@ export function LegacyDashboard() {
             <section className="space-y-8 animate-ls-fade" aria-label="Plans">
               <header>
                 <p className="eyebrow">Plans</p>
-                <h1 className="mt-2 font-serif text-3xl md:text-4xl">More businesses are coming</h1>
+                <h1 className="mt-2 font-serif text-3xl md:text-4xl">Watch more businesses</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Watching multiple businesses is part of our paid plans. Your free account includes one — here
-                  is what is planned.
+                  Watching multiple businesses is part of our paid plans. Your account includes one — pick a plan to
+                  add more.
                 </p>
               </header>
 

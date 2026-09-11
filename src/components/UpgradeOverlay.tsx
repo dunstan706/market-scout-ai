@@ -70,9 +70,12 @@ export const PRICING_PLANS: PricingPlan[] = [
 export function UpgradeOverlay({
   open,
   onClose,
+  title = "Upgrade your plan to add more businesses",
 }: {
   open: boolean;
   onClose: () => void;
+  /** Shown above the plans — hosts adapt it to why the overlay opened. */
+  title?: string | undefined;
 }) {
   const requestCheckout = useServerFn(startCheckout);
   const [checkoutError, setCheckoutError] = useState("");
@@ -124,7 +127,7 @@ export function UpgradeOverlay({
         <PricingSection
           plans={PRICING_PLANS}
           eyebrow=""
-          title="Upgrade your plan to add more businesses"
+          title={title}
           description=""
           compact
           className="bg-transparent py-6 sm:py-8"

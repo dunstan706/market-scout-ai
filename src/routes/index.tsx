@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { WaitlistForm } from "@/components/WaitlistForm";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import { SampleBriefGenerator } from "@/components/SampleBriefGenerator";
 import { AuthNavLink } from "@/components/AuthNavLink";
@@ -76,7 +75,7 @@ const PLANS = [
     period: "/mo",
     blurb: "Weekly brief for one location, up to 5 competitors.",
     items: ["Weekly Market Brief", "Prices, promotions & hours", "Review sentiment summary"],
-    cta: "Join waitlist",
+    cta: "Sign up to subscribe",
   },
   {
     name: "Advise",
@@ -85,7 +84,7 @@ const PLANS = [
     blurb: "Deeper intelligence plus recommendations you can act on.",
     items: ["Everything in Watch", "Up to 15 competitors", "New openings & closures", "Actionable recommendations", "Instant alerts on big moves"],
     featured: true,
-    cta: "Join waitlist",
+    cta: "Sign up to subscribe",
   },
   {
     name: "Expand",
@@ -118,7 +117,7 @@ function Index() {
           { name: "Try it", href: "#try" },
         ]}
         auth={<AuthNavLink />}
-        cta={{ href: "#waitlist", label: "Get early access", shortLabel: "Join" }}
+        cta={{ href: "/signup", label: "Get started", shortLabel: "Start" }}
       />
       <div className="relative">
 
@@ -133,8 +132,19 @@ function Index() {
             theBizScope continuously monitors competitors, reviews, and neighbourhood changes around your salon — then
             tells you what changed, why it matters, and what to do about it. Every Monday, in two minutes.
           </p>
-          <div className="mt-10 max-w-xl animate-rise [animation-delay:220ms]">
-            <WaitlistForm compact />
+          <div className="mt-10 flex flex-wrap items-center gap-4 animate-rise [animation-delay:220ms]">
+            <Link
+              to="/signup"
+              className="rounded-sm bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent"
+            >
+              Get started
+            </Link>
+            <a
+              href="#pricing"
+              className="rounded-sm border border-ink px-6 py-3 text-sm font-medium transition-colors hover:bg-ink hover:text-primary-foreground"
+            >
+              See pricing
+            </a>
           </div>
         </div>
       </section>
@@ -226,7 +236,7 @@ function Index() {
         <Reveal>
           <p className="eyebrow">Pricing</p>
           <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Less than one lost regular customer.</h2>
-          <p className="mt-4 max-w-xl text-muted-foreground">Per month, per location. Early-access members lock in launch pricing for 12 months.</p>
+          <p className="mt-4 max-w-xl text-muted-foreground">Per month, per location. Cancel any time.</p>
         </Reveal>
         <div ref={pricing.ref} className="mt-12 grid gap-6 md:grid-cols-3">
           {PLANS.map((p, i) => (
@@ -254,7 +264,7 @@ function Index() {
               <LandingPlanCta
                 tier={p.name === "Watch" ? "watch" : p.name === "Advise" ? "advise" : null}
                 featured={Boolean(p.featured)}
-                fallbackHref="#waitlist"
+                fallbackHref="/signup"
                 fallbackLabel={p.cta}
               />
             </div>
@@ -272,20 +282,34 @@ function Index() {
         </div>
       </section>
 
-      {/* Waitlist */}
-      <section id="waitlist" className="mx-auto max-w-6xl px-6 py-20">
+      {/* Get started */}
+      <section id="start" className="mx-auto max-w-6xl px-6 py-20">
         <Reveal>
         <div className="rule-double grid gap-10 pt-10 lg:grid-cols-2">
           <div>
-            <p className="eyebrow">Early access</p>
-            <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Get your first brief free.</h2>
+            <p className="eyebrow">Get started</p>
+            <h2 className="mt-4 text-4xl leading-tight md:text-5xl">Your market, watched from Monday.</h2>
             <p className="mt-5 text-muted-foreground leading-relaxed">
-              We're onboarding salons and spas city by city. Join the list and we'll send a sample brief for your own
-              neighbourhood before you pay a cent.
+              Create your account, tell us about your salon, and put your neighbourhood on watch — see exactly what a
+              week of market intelligence looks like before you subscribe.
             </p>
           </div>
           <div className="paper-card rounded-md p-7">
-            <WaitlistForm />
+            <div className="flex h-full flex-col items-start justify-center gap-4">
+              <p className="text-sm text-muted-foreground">Takes about a minute. No card required to sign up.</p>
+              <Link
+                to="/signup"
+                className="rounded-sm bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent"
+              >
+                Create your account
+              </Link>
+              <Link
+                to="/pricing"
+                className="text-sm underline decoration-rule underline-offset-2 hover:text-foreground"
+              >
+                See plans and pricing
+              </Link>
+            </div>
           </div>
         </div>
         </Reveal>
