@@ -1,7 +1,7 @@
 // Email variants for theBizScope briefs and alerts. Delivered through the
 // Resend REST API (plain fetch — no SDK dependency). Requires RESEND_API_KEY
 // and RESEND_FROM (a verified sender on the Resend account, e.g.
-// "theBizScope <briefs@thebizscope.app>").
+// "theBizScope <support@thebizscope.com>").
 //
 // Voice: the product says "We watch your local market. You just read the
 // brief." Emails are plain-spoken, warm and decisive — ranked signals, one
@@ -314,7 +314,7 @@ export async function sendEmail(payload: {
     return {
       ok: false,
       error:
-        "RESEND_FROM is not set — add a verified sender in Lovable Secrets, e.g. \"theBizScope <briefs@yourdomain.com>\".",
+        "RESEND_FROM is not set — add a verified sender in Lovable Secrets, e.g. \"theBizScope <support@thebizscope.com>\".",
     };
   }
   if (!/^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(payload.to)) {
@@ -323,7 +323,7 @@ export async function sendEmail(payload: {
   if (!from.includes("@") || !from.includes("<")) {
     return {
       ok: false,
-      error: `RESEND_FROM looks malformed ("${from}") — use the format "theBizScope <briefs@yourdomain.com>".`,
+      error: `RESEND_FROM looks malformed ("${from}") — use the format "theBizScope <support@thebizscope.com>".`,
     };
   }
   try {

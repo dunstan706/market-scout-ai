@@ -42,8 +42,8 @@ const SECTIONS: Array<[string, ReactNode]> = [
     "How to request one",
     [
       "Email ",
-      <a key="mail" className="underline decoration-rule underline-offset-2 hover:text-foreground" href="mailto:hello@thebizscope.app?subject=Refund%20request">
-        hello@thebizscope.app
+      <a key="mail" className="underline decoration-rule underline-offset-2 hover:text-foreground" href="mailto:support@thebizscope.com?subject=Refund%20request">
+        support@thebizscope.com
       </a>,
       " with the email on your account and the date of the payment. We reply within 5 business days with a decision — usually sooner. We never ask for card details; the payment reference is enough.",
     ],
@@ -68,8 +68,8 @@ const SECTIONS: Array<[string, ReactNode]> = [
     "Contact",
     [
       "Questions about refunds? Email ",
-      <a key="mail2" className="underline decoration-rule underline-offset-2 hover:text-foreground" href="mailto:hello@thebizscope.app">
-        hello@thebizscope.app
+      <a key="mail2" className="underline decoration-rule underline-offset-2 hover:text-foreground" href="mailto:support@thebizscope.com">
+        support@thebizscope.com
       </a>,
       " and we'll get back to you.",
     ],

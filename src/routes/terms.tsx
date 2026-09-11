@@ -77,7 +77,7 @@ const SECTIONS: Array<[string, ReactNode]> = [
   ],
   [
     "Contact",
-    "Questions about these terms? Email us at hello@thebizscope.com.",
+    "Questions about these terms? Email us at support@thebizscope.com.",
   ],
 ];
 

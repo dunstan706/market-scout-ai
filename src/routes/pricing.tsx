@@ -73,7 +73,7 @@ const BASE_PLANS: PagePlan[] = [
       "Next-location recommendations",
     ],
     buttonText: "Ask for a quote",
-    href: "mailto:hello@thebizscope.app?subject=theBizScope%20Expand%20quote",
+    href: "mailto:support@thebizscope.com?subject=theBizScope%20Expand%20quote",
     isPopular: false,
   },
 ];

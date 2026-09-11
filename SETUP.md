@@ -202,7 +202,7 @@ users will see.
 | Secret | Value |
 |---|---|
 | `RESEND_API_KEY` | `re_…` from step 1 |
-| `RESEND_FROM` | Verified sender, e.g. `theBizScope <briefs@yourdomain.com>` |
+| `RESEND_FROM` | Verified sender, e.g. `theBizScope <support@thebizscope.com>` |
 | `LOVABLE_CRON_SECRET` | A long random string (used by the scheduler) |
 
 Private keys always go in **Secrets**, never in `.env`.

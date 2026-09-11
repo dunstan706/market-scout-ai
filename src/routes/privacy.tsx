@@ -18,7 +18,7 @@ export const Route = createFileRoute("/privacy")({
 const SECTIONS: Array<[string, string]> = [
   [
     "Who we are",
-    "theBizScope watches the local market around small businesses and turns what it finds into plain-English briefs. That's who \"we\" means in this policy. Reach us any time at privacy@thebizscope.com.",
+    "theBizScope watches the local market around small businesses and turns what it finds into plain-English briefs. That's who \"we\" means in this policy. Reach us any time at support@thebizscope.com.",
   ],
   [
     "What we collect",
@@ -62,7 +62,7 @@ const SECTIONS: Array<[string, string]> = [
   ],
   [
     "Contact",
-    "Questions about this policy? Email us at privacy@thebizscope.com and we'll get back to you.",
+    "Questions about this policy? Email us at support@thebizscope.com and we'll get back to you.",
   ],
 ];
 
