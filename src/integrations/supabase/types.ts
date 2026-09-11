@@ -88,6 +88,7 @@ export type Database = {
           cancel_at_period_end: boolean
           created_at: string
           current_period_end: string | null
+          google_place_id: string | null
           id: string
           location: string | null
           plan_tier: string
@@ -103,6 +104,7 @@ export type Database = {
           cancel_at_period_end?: boolean
           created_at?: string
           current_period_end?: string | null
+          google_place_id?: string | null
           id: string
           location?: string | null
           plan_tier?: string
@@ -118,6 +120,7 @@ export type Database = {
           cancel_at_period_end?: boolean
           created_at?: string
           current_period_end?: string | null
+          google_place_id?: string | null
           id?: string
           location?: string | null
           plan_tier?: string
