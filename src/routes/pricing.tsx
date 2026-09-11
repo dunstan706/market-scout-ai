@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { AnimatedNavFramer } from "@/components/ui/animated-nav-framer";
@@ -18,6 +18,20 @@ export const Route = createFileRoute("/pricing")({
       },
     ],
   }),
+  // ?tier=&cadence= is the resume-checkout intent handed back by signup/login.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): {
+    tier?: "watch" | "advise" | undefined;
+    cadence?: "monthly" | "yearly" | undefined;
+  } => {
+    const tier = typeof search["tier"] === "string" ? search["tier"] : undefined;
+    const cadence = typeof search["cadence"] === "string" ? search["cadence"] : undefined;
+    return {
+      tier: tier === "watch" || tier === "advise" ? tier : undefined,
+      cadence: cadence === "monthly" || cadence === "yearly" ? cadence : undefined,
+    };
+  },
   component: PricingPage,
 });
 
@@ -78,7 +92,15 @@ const BASE_PLANS: PagePlan[] = [
   },
 ];
 
+// Loosely-typed generated route tree — assert the validated search shape.
+type PricingSearch = {
+  tier?: "watch" | "advise" | undefined;
+  cadence?: "monthly" | "yearly" | undefined;
+};
+
 function PricingPage() {
+  const router = useRouter();
+  const { tier: resumeTier, cadence: resumeCadence } = Route.useSearch() as PricingSearch;
   const fetchPreview = useServerFn(previewLocalizedPricing);
   const [plans, setPlans] = useState<PagePlan[]>(() => BASE_PLANS.map((plan) => ({ ...plan })));
   const [notice, setNotice] = useState<string | null>(null);
@@ -105,6 +127,21 @@ function PricingPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Resume checkout after signup/login: once the session and Paddle are both
+  // ready, open the overlay for the plan in the URL, then clean the params so
+  // a reload doesn't re-open it. Fired at most once per mount.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    if (!resumeTier || !resumeCadence || !userEmail || !paddleReady) return;
+    resumedRef.current = true;
+    openCheckout({ tier: resumeTier, cadence: resumeCadence, email: userEmail, userId }).finally(
+      () => {
+        router.navigate({ to: "/pricing", search: {} });
+      },
+    );
+  }, [resumeTier, resumeCadence, userEmail, userId, paddleReady, openCheckout, router]);
 
   // Localized, tax-inclusive prices for the visitor's country (IP-resolved).
   useEffect(() => {
@@ -135,6 +172,15 @@ function PricingPage() {
   const handleSelect = useCallback(
     async (plan: PricingPlan, monthly: boolean) => {
       if (!plan.tier) return;
+      // Logged-out visitors sign up first; the picked plan rides along in the
+      // URL and checkout resumes right after account creation (or login).
+      if (!userEmail) {
+        await router.navigate({
+          to: "/signup",
+          search: { tier: plan.tier, cadence: monthly ? "monthly" : "yearly" },
+        });
+        return;
+      }
       if (!paddleReady) {
         setNotice(paddleError || "Checkout is loading — one moment.");
         return;
@@ -146,7 +192,7 @@ function PricingPage() {
         userId,
       });
     },
-    [paddleReady, openCheckout, userEmail, userId],
+    [userEmail, router, paddleReady, openCheckout, userId],
   );
 
   return (
@@ -154,10 +200,17 @@ function PricingPage() {
       <ConstellationGrid className="fixed inset-0 h-screen w-full" />
       <div className="relative z-10">
         <AnimatedNavFramer
-          logo={<span className="font-serif text-lg font-bold">theBizScope</span>}
+          logo={
+            <a
+              href="/"
+              className="font-serif text-lg font-bold text-foreground transition-colors hover:text-accent"
+              aria-label="theBizScope home"
+            >
+              theBizScope
+            </a>
+          }
           items={[
             { name: "Home", href: "/" },
-            { name: "Dashboard", href: "/dashboard" },
             { name: "Profile", href: "/profile" },
           ]}
           auth={<AuthNavLink />}
@@ -193,6 +246,8 @@ function PricingPage() {
             description=""
             className="bg-transparent py-0"
             onSelect={handleSelect}
+            isMonthly={isMonthly}
+            onIsMonthlyChange={setIsMonthly}
           />
         </section>
         <footer className="mx-auto max-w-6xl px-6 pb-16 text-xs text-muted-foreground">

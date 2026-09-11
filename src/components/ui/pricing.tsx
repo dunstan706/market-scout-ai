@@ -125,6 +125,11 @@ interface PricingSectionProps {
    *  `href` — used by the dashboard overlay to start Paddle checkout with
    *  the currently selected billing cadence. */
   onSelect?: ((plan: PricingPlan, isMonthly: boolean) => void) | undefined;
+  /** Controlled cadence: pass both to own the Monthly/Annual toggle from the
+   *  host page (e.g. to re-fetch localized prices). Omit for the default
+   *  self-contained behaviour. */
+  isMonthly?: boolean;
+  onIsMonthlyChange?: ((monthly: boolean) => void) | undefined;
 }
 
 // Context for state management
@@ -146,11 +151,20 @@ export function PricingSection({
   className,
   compact = false,
   onSelect,
+  isMonthly: isMonthlyProp,
+  onIsMonthlyChange,
 }: PricingSectionProps) {
-  const [isMonthly, setIsMonthly] = useState(true);
+  const [internalMonthly, setInternalMonthly] = useState(true);
+  const controlled = isMonthlyProp !== undefined && onIsMonthlyChange !== undefined;
+  const isMonthly = controlled ? isMonthlyProp : internalMonthly;
+  const setIsMonthly = (value: boolean) => {
+    if (controlled) onIsMonthlyChange(value);
+    else setInternalMonthly(value);
+  };
 
   return (
     <PricingContext.Provider value={{ isMonthly, setIsMonthly, onSelect }}>
+
       <div
         className={cn(
           "relative w-full bg-background py-20 sm:py-24",

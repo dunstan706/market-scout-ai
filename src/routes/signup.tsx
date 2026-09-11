@@ -9,15 +9,43 @@ export const Route = createFileRoute("/signup")({
       { title: "Create your account — theBizScope" },
       { name: "description", content: "Create a theBizScope account for your salon or spa." },
     ],
+    // Coming from a Subscribe button: the checkout intent survives signup.
+    validateSearch: (
+      search: Record<string, unknown>,
+    ): {
+      email?: string | undefined;
+      tier?: "watch" | "advise" | undefined;
+      cadence?: "monthly" | "yearly" | undefined;
+    } => {
+      const tier = typeof search["tier"] === "string" ? search["tier"] : undefined;
+      const cadence = typeof search["cadence"] === "string" ? search["cadence"] : undefined;
+      return {
+        email: typeof search["email"] === "string" && search["email"] ? search["email"] : undefined,
+        tier: tier === "watch" || tier === "advise" ? tier : undefined,
+        cadence: cadence === "monthly" || cadence === "yearly" ? cadence : undefined,
+      };
+    },
   }),
   component: SignupPage,
 });
 
+// The generated route tree in this project is loosely typed (Lovable's
+// generator), so the validated search shape is asserted here instead of
+// inferred — validateSearch above guarantees it at runtime.
+type SignupSearch = {
+  email?: string | undefined;
+  tier?: "watch" | "advise" | undefined;
+  cadence?: "monthly" | "yearly" | undefined;
+};
+
 function SignupPage() {
+  const { email: presetEmail, tier, cadence } = Route.useSearch() as SignupSearch;
   const router = useRouter();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const hasCheckoutIntent = Boolean(tier && cadence);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,7 +69,11 @@ function SignupPage() {
         setLoading(false);
         return;
       }
-      await router.navigate({ to: "/dashboard" });
+      await router.navigate(
+        hasCheckoutIntent
+          ? { to: "/pricing", search: { tier, cadence } }
+          : { to: "/dashboard" },
+      );
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -50,13 +82,21 @@ function SignupPage() {
 
   return (
     <AuthLayout
-      eyebrow="Set up your market watch"
-      title="Create your account."
-      subtitle="Save your salon's details and generate briefs for your own neighbourhood."
+      eyebrow={hasCheckoutIntent ? "Almost yours" : "Set up your market watch"}
+      title={hasCheckoutIntent ? "Create your account to subscribe." : "Create your account."}
+      subtitle={
+        hasCheckoutIntent
+          ? "Your plan is saved — it resumes right after signup."
+          : "Save your salon's details and generate briefs for your own neighbourhood."
+      }
       footer={
         <>
           Already have an account?{" "}
-          <Link to="/login" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+          <Link
+            to="/login"
+            {...(hasCheckoutIntent ? { search: { tier, cadence } } : {})}
+            className="underline decoration-rule underline-offset-2 hover:text-foreground"
+          >
             Log in
           </Link>
         </>
@@ -71,6 +111,7 @@ function SignupPage() {
           autoComplete="email"
           placeholder="you@yoursalon.com"
           aria-label="Email address"
+          defaultValue={presetEmail ?? ""}
         />
         <input
           className={authInput}
@@ -85,7 +126,11 @@ function SignupPage() {
         {error && <p className="text-sm text-signal-red">{error}</p>}
         {notice && <p className="text-sm text-signal-green">{notice}</p>}
         <button type="submit" disabled={loading} className={authButton}>
-          {loading ? "Creating account…" : "Create account"}
+          {loading
+            ? "Creating account…"
+            : hasCheckoutIntent
+              ? "Create account & continue to checkout"
+              : "Create account"}
         </button>
         <p className="text-xs text-muted-foreground">
           No card required to sign up — subscribe only when you're ready.
