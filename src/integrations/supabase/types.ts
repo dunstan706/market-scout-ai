@@ -91,6 +91,8 @@ export type Database = {
           google_place_id: string | null
           id: string
           location: string | null
+          paddle_customer_id: string | null
+          paddle_subscription_id: string | null
           plan_tier: string
           price_point: string | null
           stripe_customer_id: string | null
@@ -107,6 +109,8 @@ export type Database = {
           google_place_id?: string | null
           id: string
           location?: string | null
+          paddle_customer_id?: string | null
+          paddle_subscription_id?: string | null
           plan_tier?: string
           price_point?: string | null
           stripe_customer_id?: string | null
@@ -123,6 +127,8 @@ export type Database = {
           google_place_id?: string | null
           id?: string
           location?: string | null
+          paddle_customer_id?: string | null
+          paddle_subscription_id?: string | null
           plan_tier?: string
           price_point?: string | null
           stripe_customer_id?: string | null
