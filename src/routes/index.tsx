@@ -6,19 +6,20 @@ import { AuthNavLink } from "@/components/AuthNavLink";
 import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { AnimatedNavFramer } from "@/components/ui/animated-nav-framer";
 import { Reveal } from "@/components/Reveal";
+import { LandingPlanCta } from "@/components/LandingPlanCta";
 import { useSmoothedScroll } from "@/lib/use-smoothed-scroll";
 import { useGridCols } from "@/lib/use-grid-cols";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Localscope — Weekly market briefs for salons & spas" },
+      { title: "theBizScope — Weekly market briefs for salons & spas" },
       {
         name: "description",
         content:
           "AI that watches your local salon market — competitor prices, reviews, new openings — and tells you what changed, why it matters, and what to do.",
       },
-      { property: "og:title", content: "Localscope — Weekly market briefs for salons & spas" },
+      { property: "og:title", content: "theBizScope — Weekly market briefs for salons & spas" },
       {
         property: "og:description",
         content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners.",
@@ -107,7 +108,7 @@ function Index() {
       <AnimatedNavFramer
         logo={
           <a href="#top" className="whitespace-nowrap font-serif text-xl tracking-tight sm:text-2xl">
-            Localscope<span className="text-accent">.</span>
+            theBizScope<span className="text-accent">.</span>
           </a>
         }
         items={[
@@ -129,7 +130,7 @@ function Index() {
             We watch your local market. <em className="text-accent">You</em> just read the brief.
           </h1>
           <p className="mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground animate-rise [animation-delay:120ms]">
-            Localscope continuously monitors competitors, reviews, and neighbourhood changes around your salon — then
+            theBizScope continuously monitors competitors, reviews, and neighbourhood changes around your salon — then
             tells you what changed, why it matters, and what to do about it. Every Monday, in two minutes.
           </p>
           <div className="mt-10 max-w-xl animate-rise [animation-delay:220ms]">
@@ -250,20 +251,12 @@ function Index() {
                   </li>
                 ))}
               </ul>
-              <a
-                href="#waitlist"
-                className={`mt-auto pt-8 inline-block text-center text-sm font-medium`}
-              >
-                <span
-                  className={`inline-block w-full rounded-sm px-4 py-2.5 transition-colors ${
-                    p.featured
-                      ? "bg-primary text-primary-foreground hover:bg-accent"
-                      : "border border-ink hover:bg-primary hover:text-primary-foreground"
-                  }`}
-                >
-                  {p.cta}
-                </span>
-              </a>
+              <LandingPlanCta
+                tier={p.name === "Watch" ? "watch" : p.name === "Advise" ? "advise" : null}
+                featured={Boolean(p.featured)}
+                fallbackHref="#waitlist"
+                fallbackLabel={p.cta}
+              />
             </div>
             </Reveal>
           ))}
@@ -299,13 +292,16 @@ function Index() {
       </section>
 
       <footer className="mx-auto flex max-w-6xl flex-col gap-3 border-t border-rule px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <p>© 2026 Localscope. AI market research for local businesses.</p>
+        <p>© 2026 theBizScope. AI market research for local businesses.</p>
         <div className="flex items-center gap-5">
           <Link to="/privacy" className="underline decoration-rule underline-offset-2 hover:text-foreground">
             Privacy
           </Link>
           <Link to="/terms" className="underline decoration-rule underline-offset-2 hover:text-foreground">
             Terms
+          </Link>
+          <Link to="/refund" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+            Refunds
           </Link>
           <p>Starting with salons & spas. More verticals soon.</p>
         </div>

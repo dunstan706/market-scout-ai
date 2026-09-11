@@ -531,7 +531,7 @@ export function GlobeDashboard() {
         collapsible={false}
         logo={
           <Link to="/" className="whitespace-nowrap font-serif text-xl tracking-tight sm:text-2xl">
-            Localscope<span className="text-accent">.</span>
+            theBizScope<span className="text-accent">.</span>
           </Link>
         }
         items={[

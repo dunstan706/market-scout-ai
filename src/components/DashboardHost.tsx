@@ -7,7 +7,7 @@ import { LegacyDashboardToggle } from "@/components/LegacyDashboardToggle";
 
 // Remembered in the tab session so a reload keeps whichever dashboard the
 // user picked.
-const MODE_KEY = "localscope-dashboard-mode";
+const MODE_KEY = "thebizscope-dashboard-mode";
 
 /**
  * Hosts both dashboards under one URL. The LegacyDashboardToggle flips the

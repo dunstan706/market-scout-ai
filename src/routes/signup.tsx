@@ -6,8 +6,8 @@ import { AuthLayout, authButton, authInput } from "@/components/AuthLayout";
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Create your account — Localscope" },
-      { name: "description", content: "Create a free Localscope account for your salon or spa." },
+      { title: "Create your account — theBizScope" },
+      { name: "description", content: "Create a free theBizScope account for your salon or spa." },
     ],
   }),
   component: SignupPage,
@@ -88,7 +88,7 @@ function SignupPage() {
           {loading ? "Creating account…" : "Create account"}
         </button>
         <p className="text-xs text-muted-foreground">
-          Free while Localscope is in early access. No card required.
+          Free while theBizScope is in early access. No card required.
         </p>
       </form>
     </AuthLayout>

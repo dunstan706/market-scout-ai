@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { PricingSection, type PricingPlan } from "@/components/ui/pricing";
+import { startCheckout } from "@/lib/account.functions";
 
 // Plans for the upgrade overlay — mirrors the landing page's pricing, with
 // yearly prices for the toggle and the same three tiers.
@@ -20,6 +22,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     ],
     buttonText: "Current plan",
     href: "#",
+    tier: "watch",
   },
   {
     name: "Advise",
@@ -38,6 +41,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     buttonText: "Upgrade",
     href: "#",
     isPopular: true,
+    tier: "advise",
   },
   {
     name: "Expand",
@@ -70,6 +74,9 @@ export function UpgradeOverlay({
   open: boolean;
   onClose: () => void;
 }) {
+  const requestCheckout = useServerFn(startCheckout);
+  const [checkoutError, setCheckoutError] = useState("");
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -78,6 +85,26 @@ export function UpgradeOverlay({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  const handleSelect = useCallback(
+    async (plan: PricingPlan, isMonthly: boolean) => {
+      if (!plan.tier) return;
+      setCheckoutError("");
+      try {
+        const result = await requestCheckout({
+          data: { tier: plan.tier, cadence: isMonthly ? "monthly" : "yearly" },
+        });
+        if (result.ok) {
+          window.location.href = result.url;
+        } else {
+          setCheckoutError(result.error);
+        }
+      } catch {
+        setCheckoutError("Could not start checkout. Please try again.");
+      }
+    },
+    [requestCheckout],
+  );
 
   if (!open) return null;
 
@@ -89,6 +116,11 @@ export function UpgradeOverlay({
         data-skip-globe
       />
       <div className="animate-rise relative w-full max-w-5xl" data-skip-globe>
+        {checkoutError ? (
+          <p className="relative z-10 mx-auto mb-3 max-w-2xl rounded-sm border border-destructive/40 bg-destructive/10 px-4 py-2 text-center text-xs text-red-300">
+            {checkoutError}
+          </p>
+        ) : null}
         <PricingSection
           plans={PRICING_PLANS}
           eyebrow=""
@@ -96,6 +128,7 @@ export function UpgradeOverlay({
           description=""
           compact
           className="bg-transparent py-6 sm:py-8"
+          onSelect={handleSelect}
         />
       </div>
     </div>

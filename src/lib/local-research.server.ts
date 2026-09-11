@@ -10,7 +10,7 @@ const OVERPASS_URLS = [
 const OVERPASS_TIMEOUT_MS = 40_000;
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
-const USER_AGENT = "Localscope/1.0 (local market research demo)";
+const USER_AGENT = "theBizScope/1.0 (local market research demo)";
 const NEARBY_RADIUS_METERS = 5_000;
 const WIDE_RADIUS_METERS = 15_000;
 const THIN_COVERAGE_COUNT = 3;
@@ -50,6 +50,9 @@ export type OwnListingReview = {
 
 export type OwnListing = {
   name: string;
+  /** Google Places ID of the matched listing. Persisted on the profile after
+   *  a successful scan so future lookups key on the ID, not the typed name. */
+  placeId?: string | undefined;
   rating?: number | undefined;
   reviewCount?: number | undefined;
   url?: string | undefined;
@@ -65,6 +68,10 @@ export type ResearchSnapshot = {
   };
   competitors: ResearchCompetitor[];
   ownListing?: OwnListing | undefined;
+  /** The matched listing's Google place ID, duplicated at the top level so
+   *  callers can persist it on the profile even if ownListing is stripped
+   *  downstream. */
+  ownListingPlaceId?: string | undefined;
   sources: ResearchSource[];
   warnings: string[];
   capturedAt: string;
@@ -130,14 +137,69 @@ function googleApiKey(): string | undefined {
   return process.env["GOOGLE_PLACES_API_KEY"] || process.env["GOOGLE_MAPS_API_KEY"];
 }
 
+const NAME_STOPWORDS = /\b(the|salon|spa|ltd|limited|llc|inc)\b/g;
+
 export function normalizeName(value: string): string {
   return value
     .toLocaleLowerCase()
+    .replace(/'s\b/g, " ")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(the|salon|spa|ltd|limited|llc|inc)\b/g, " ")
+    .replace(NAME_STOPWORDS, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(value.split(" ").filter(Boolean));
+}
+
+// Fraction of the larger name's tokens covered by the smaller name's tokens,
+// with partial (0.75) credit for prefix/nickname matches like "sam" vs
+// "samantha" and near-identical tokens like "raddiance" vs "radiance".
+// Tolerates word order, dropped words, shortened first names, and typos —
+// while keeping genuinely distinct names ("Hair Studio" vs "Nail Studio")
+// apart, because whole-string edit distance would wrongly merge those.
+function tokenCoverage(aTokens: Set<string>, bTokens: Set<string>): number {
+  const larger = aTokens.size >= bTokens.size ? aTokens : bTokens;
+  const smaller = aTokens === larger ? bTokens : aTokens;
+  if (larger.size === 0) return 0;
+  let matched = 0;
+  for (const token of smaller) {
+    if (larger.has(token)) {
+      matched += 1;
+      continue;
+    }
+    let best = 0;
+    for (const other of larger) {
+      const min = Math.min(token.length, other.length);
+      if (min >= 3 && (token.startsWith(other) || other.startsWith(token))) {
+        best = Math.max(best, 0.75);
+        continue;
+      }
+      if (min >= 3 && editDistance(token, other) / Math.max(token.length, other.length) <= 0.25) {
+        best = Math.max(best, 0.75);
+      }
+    }
+    matched += best;
+  }
+  return matched / larger.size;
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current: number[] = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const insert = current[j - 1]! + 1;
+      const remove = previous[j]! + 1;
+      const replace = previous[j - 1]! + cost;
+      current[j] = Math.min(insert, remove, replace);
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
 }
 
 export function namesLikelyMatch(a: string, b: string): boolean {
@@ -145,7 +207,13 @@ export function namesLikelyMatch(a: string, b: string): boolean {
   const right = normalizeName(b);
   if (!left || !right) return false;
   if (left === right) return true;
-  return left.includes(right) || right.includes(left);
+  // A longer full name containing the shorter one ("Radiance" inside
+  // "Radiance Studio"). Guarded by length so short words like "Anna" don't
+  // collapse distinct names ("Anna Nails" vs "Anna Spa" -> "anna").
+  if (Math.min(left.length, right.length) >= 5 && (left.includes(right) || right.includes(left))) {
+    return true;
+  }
+  return tokenCoverage(tokenSet(left), tokenSet(right)) >= 0.6;
 }
 
 function text(value: unknown): string | undefined {
@@ -269,14 +337,57 @@ export function readJsonLdEvidence(html: string): WebsiteEvidence {
   return evidence;
 }
 
+// Competitor websites come from community-editable data (OpenStreetMap tags,
+// directory listings), so the URL must be validated before the server fetches
+// it — otherwise a crafted "website" tag could make us probe internal
+// services (SSRF). Only public http(s) origins are allowed.
+// Exported for tests.
+export function isPublicWebsiteUrl(candidate: string): boolean {
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+      return false;
+    }
+    // Bare IPv4/IPv6 literals: only allow public ranges.
+    if (/^[\d.]+$/.test(host)) {
+      const parts = host.split(".").map((part) => Number(part));
+      if (parts.length !== 4 || parts.some((part) => part > 255)) return false;
+      const [a, b] = parts as [number, number, number, number];
+      if (a === 0 || a === 10 || a === 127) return false; // this-network, private, loopback
+      if (a === 169 && b === 254) return false; // link-local (cloud metadata)
+      if (a === 172 && b >= 16 && b <= 31) return false; // private
+      if (a === 192 && b === 168) return false; // private
+      return true;
+    }
+    if (host.includes(":")) {
+      // IPv6: loopback, unique-local (fc00::/7), link-local (fe80::/10).
+      const normalized = host.replace(/^\[|\]$/g, "").toLowerCase();
+      if (normalized === "::1" || normalized === "::") return false;
+      if (/^f[cd]/.test(normalized)) return false;
+      if (/^fe[89ab]/.test(normalized)) return false;
+      return true;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function collectWebsiteEvidence(url: string): Promise<WebsiteEvidence> {
+  if (!isPublicWebsiteUrl(url)) throw new Error(`Blocked non-public website URL`);
+  const cacheKey = `website:${url}`;
+  const cached = cacheGet<WebsiteEvidence>(cacheKey);
+  if (cached) return cached;
   const response = await fetch(url, {
     headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": USER_AGENT },
     signal: AbortSignal.timeout(7000),
   });
   if (!response.ok) throw new Error(`Website returned ${response.status}`);
   const html = (await response.text()).slice(0, 600_000);
-  return readJsonLdEvidence(html);
+  const evidence = readJsonLdEvidence(html);
+  return cacheSet(cacheKey, evidence, PLACES_CACHE_TTL_MS);
 }
 
 async function geocodeNominatim(location: string): Promise<{ displayName: string; latitude: number; longitude: number }> {
@@ -395,7 +506,6 @@ function mapOpenStreetMapCompetitors(
   location: { latitude: number; longitude: number },
   businessName: string,
 ): ResearchCompetitor[] {
-  const normalizedName = businessName.toLocaleLowerCase().trim();
   const seen = new Set<string>();
   return elements
     .map((element): ResearchCompetitor | null => {
@@ -405,7 +515,7 @@ function mapOpenStreetMapCompetitors(
       const name = text(tags["name"]);
       if (!name || latitude === undefined || longitude === undefined) return null;
       const key = `${name.toLocaleLowerCase()}|${Math.round(latitude * 10_000)}|${Math.round(longitude * 10_000)}`;
-      if (seen.has(key) || name.toLocaleLowerCase() === normalizedName) return null;
+      if (seen.has(key) || namesLikelyMatch(businessName, name)) return null;
       seen.add(key);
       const distanceMeters = distanceInMeters(location.latitude, location.longitude, latitude, longitude);
       const website = cleanWebsiteUrl(tags["website"] ?? tags["contact:website"]);
@@ -477,7 +587,6 @@ async function fetchGoogleCompetitors(
   const cacheKey = `places:${businessType}|${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}|${radiusMeters}`;
   const cached = cacheGet<ResearchCompetitor[]>(cacheKey);
   if (cached) return cached;
-  const ownName = businessName.toLocaleLowerCase().trim();
   const response = await fetchJson<GoogleSearchResponse>(GOOGLE_PLACES_URL, {
     method: "POST",
     headers: {
@@ -503,7 +612,7 @@ async function fetchGoogleCompetitors(
     const latitude = number(place.location?.latitude);
     const longitude = number(place.location?.longitude);
     if (!name || latitude === undefined || longitude === undefined) return [];
-    if (name.toLocaleLowerCase() === ownName) return [];
+    if (namesLikelyMatch(businessName, name)) return [];
     const review = place.reviews?.find((item) => text(item.text?.text));
     const mapUrl = text(place.googleMapsUri) ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
     const hours = place.currentOpeningHours?.weekdayDescriptions?.slice(0, 2).join(" · ");
@@ -532,69 +641,131 @@ async function fetchGoogleCompetitors(
 
 const OWN_LISTING_RADIUS_METERS = 1_500;
 
-// Looks up the business's own Google listing (exact name near the geocoded
-// location) so reputation — rating, review count, newest reviews — can be
-// tracked across scans and benchmarked against the field. Returns undefined
-// when there is no API key or no matching listing; small businesses without a
-// Google presence are common, so the absence surfaces as a UI nudge instead of
-// an error. Negative results are not cached, so a listing that appears later
-// is picked up on a future scan.
+// Looks up the business's own Google listing (by stored place ID when
+// available, otherwise by name near the geocoded location) so reputation —
+// rating, review count, newest reviews — can be tracked across scans and
+// benchmarked against the field. Returns undefined when there is no API key or
+// no matching listing; small businesses without a Google presence are common,
+// so the absence surfaces as a UI nudge instead of an error. Negative results
+// are not cached, so a listing that appears later is picked up on a future
+// scan — and once a match does land, its place ID is persisted on the profile,
+// after which the typed name stops mattering entirely.
 async function fetchOwnListing(
   location: { displayName: string; latitude: number; longitude: number },
-  input: { businessName: string },
+  input: { businessName: string; businessType: string },
+  options?: { knownPlaceId?: string | undefined },
 ): Promise<OwnListing | undefined> {
   const apiKey = googleApiKey();
   if (!apiKey) return undefined;
-  const cacheKey = `own:${input.businessName.trim().toLocaleLowerCase()}|${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`;
-  const cached = cacheGet<OwnListing>(cacheKey);
-  if (cached) return cached;
-  try {
-    const response = await fetchJson<GoogleSearchResponse>(GOOGLE_PLACES_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask":
-          "places.displayName,places.formattedAddress,places.googleMapsUri,places.rating,places.userRatingCount,places.location,places.reviews",
-      },
-      body: JSON.stringify({
-        textQuery: input.businessName,
-        maxResultCount: 8,
-        languageCode: "en",
-        locationBias: {
-          circle: {
-            center: { latitude: location.latitude, longitude: location.longitude },
-            radius: OWN_LISTING_RADIUS_METERS,
-          },
+  const knownPlaceId = options?.knownPlaceId?.trim() || undefined;
+
+  // A stored place ID is authoritative: one direct lookup, no name matching,
+  // no proximity filter. Immune to typos, word order, and rebrands.
+  if (knownPlaceId) {
+    try {
+      const response = await fetchJson<GooglePlace>("https://places.googleapis.com/v1/places/" + encodeURIComponent(knownPlaceId), {
+        headers: {
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask":
+            "id,displayName,formattedAddress,googleMapsUri,rating,userRatingCount,reviews",
         },
-      }),
-    });
-    const matches = (response.places ?? []).flatMap<{
-      place: GooglePlace;
-      name: string;
-      distanceMeters: number;
-      reviews: OwnListingReview[];
-    }>((place) => {
-      const name = text(place.displayName?.text);
-      const latitude = number(place.location?.latitude);
-      const longitude = number(place.location?.longitude);
-      if (!name || latitude === undefined || longitude === undefined) return [];
-      if (!namesLikelyMatch(input.businessName, name)) return [];
-      const distanceMeters = distanceInMeters(location.latitude, location.longitude, latitude, longitude);
-      if (distanceMeters > OWN_LISTING_RADIUS_METERS) return [];
-      const reviews: OwnListingReview[] = (place.reviews ?? [])
+      });
+      const name = text(response.displayName?.text);
+      if (!name) return undefined;
+      const reviews: OwnListingReview[] = (response.reviews ?? [])
         .map((review) => ({
           ...(number(review.rating) !== undefined ? { rating: number(review.rating) } : {}),
           ...(text(review.text?.text) ? { text: text(review.text?.text)?.slice(0, 240) } : {}),
         }))
         .filter((review) => review.text !== undefined);
-      return [{ place, name, distanceMeters, reviews }];
-    });
+      const listing: OwnListing = {
+        name,
+        placeId: response.id ?? knownPlaceId,
+        ...(number(response.rating) !== undefined ? { rating: number(response.rating) } : {}),
+        ...(number(response.userRatingCount) !== undefined ? { reviewCount: number(response.userRatingCount) } : {}),
+        ...(text(response.googleMapsUri) ? { url: text(response.googleMapsUri) } : {}),
+        ...(text(response.formattedAddress) ? { address: text(response.formattedAddress) } : {}),
+        ...(reviews.length > 0 ? { reviews } : {}),
+      };
+      return listing;
+    } catch (error) {
+      // The pinned listing can vanish (permanently closed, delisted). Fall
+      // back to a name lookup below rather than failing the scan.
+      console.error(
+        "own listing lookup by place id failed",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  const cacheKey = `own:${input.businessName.trim().toLocaleLowerCase()}|${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`;
+  const cached = cacheGet<OwnListing>(cacheKey);
+  if (cached) return cached;
+  try {
+    // Runs one Google text search and filters candidates down to the own
+    // business by fuzzy name match plus proximity.
+    const search = async (textQuery: string, radiusMeters: number) => {
+      const response = await fetchJson<GoogleSearchResponse>(GOOGLE_PLACES_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.rating,places.userRatingCount,places.location,places.reviews",
+        },
+        body: JSON.stringify({
+          textQuery,
+          maxResultCount: 8,
+          languageCode: "en",
+          locationBias: {
+            circle: {
+              center: { latitude: location.latitude, longitude: location.longitude },
+              radius: radiusMeters,
+            },
+          },
+        }),
+      });
+      return (response.places ?? []).flatMap<{
+        place: GooglePlace;
+        name: string;
+        distanceMeters: number;
+        reviews: OwnListingReview[];
+      }>((place) => {
+        const name = text(place.displayName?.text);
+        const latitude = number(place.location?.latitude);
+        const longitude = number(place.location?.longitude);
+        if (!name || latitude === undefined || longitude === undefined) return [];
+        if (!namesLikelyMatch(input.businessName, name)) return [];
+        const distanceMeters = distanceInMeters(location.latitude, location.longitude, latitude, longitude);
+        if (distanceMeters > radiusMeters) return [];
+        const reviews: OwnListingReview[] = (place.reviews ?? [])
+          .map((review) => ({
+            ...(number(review.rating) !== undefined ? { rating: number(review.rating) } : {}),
+            ...(text(review.text?.text) ? { text: text(review.text?.text)?.slice(0, 240) } : {}),
+          }))
+          .filter((review) => review.text !== undefined);
+        return [{ place, name, distanceMeters, reviews }];
+      });
+    };
+
+    // First pass: the bare name near the geocoded location. The fuzzy matcher
+    // usually lands it even when the typed name isn't word-for-word — but when
+    // it can't (e.g. a paraphrase of Google's canonical name), retry with the
+    // category appended ("Radiance hair salon beauty salon") over a wider
+    // radius, where Google's own text matching is far more forgiving.
+    let matches = await search(input.businessName, OWN_LISTING_RADIUS_METERS);
+    if (matches.length === 0 && input.businessType !== "other") {
+      matches = await search(
+        `${input.businessName} ${placesQueryLabel(input.businessType)}`,
+        NEARBY_RADIUS_METERS,
+      );
+    }
     matches.sort((a, b) => a.distanceMeters - b.distanceMeters);
     const best = matches[0];
     if (!best) return undefined;
     const listing: OwnListing = {
       name: best.name,
+      ...(text(best.place.id) ? { placeId: text(best.place.id) } : {}),
       ...(number(best.place.rating) !== undefined ? { rating: number(best.place.rating) } : {}),
       ...(number(best.place.userRatingCount) !== undefined ? { reviewCount: number(best.place.userRatingCount) } : {}),
       ...(text(best.place.googleMapsUri) ? { url: text(best.place.googleMapsUri) } : {}),
@@ -668,6 +839,9 @@ export async function collectLocalResearch(
     businessName: string;
     location: string;
     businessType: string;
+    /** Place ID persisted from a previous successful scan. When present, the
+     *  own-listing lookup targets it directly instead of re-matching names. */
+    googlePlaceId?: string | undefined;
   },
   options?: { mode?: SecondaryMode },
 ): Promise<ResearchSnapshot> {
@@ -677,17 +851,17 @@ export async function collectLocalResearch(
   const sources: ResearchSource[] = [];
   const placesKey = googleApiKey();
 
-  // Find the user's own listing so their rating / reviews / price position can
-  // be benchmarked and tracked across scans — it is never reported as a
+  // Own-listing lookup runs in parallel with the competitor fetches — it's
+  // an independent Google call and blocks nothing. It is never reported as a
   // competitor. Only runs when a Google key is connected.
-  const ownListing = placesKey
-    ? await fetchOwnListing(resolvedLocation, input).catch(() => undefined)
-    : undefined;
-
-  const [osmResult, googleResult] = await Promise.allSettled([
+  const [ownListingResult, osmResult, googleResult] = await Promise.allSettled([
+    placesKey
+      ? fetchOwnListing(resolvedLocation, input, { knownPlaceId: input.googlePlaceId })
+      : Promise.resolve(undefined as OwnListing | undefined),
     fetchOpenStreetMapCompetitors(resolvedLocation, input.businessName, input.businessType),
     fetchGoogleCompetitors(resolvedLocation, input.businessName, input.businessType),
   ]);
+  const ownListing = ownListingResult.status === "fulfilled" ? ownListingResult.value : undefined;
   let osmCompetitors = osmResult.status === "fulfilled" ? osmResult.value : [];
   let googleCompetitors = googleResult.status === "fulfilled" ? googleResult.value : [];
   let googleReached = googleResult.status === "fulfilled";
@@ -801,6 +975,10 @@ export async function collectLocalResearch(
     sources,
     warnings,
     ownListing,
+    // Surfaced separately so callers can pin the matched listing on the
+    // profile even when ownListing itself is undefined (e.g. the brief
+    // writer stripped it) — this is what ends the name-lookup dependency.
+    ownListingPlaceId: ownListing?.placeId,
     capturedAt: new Date().toISOString(),
   };
 }

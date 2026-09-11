@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dedupeByPlace,
+  foursquareRating,
   resultCapsFor,
   WEEKLY_MAIL_NOTE,
   type ResearchCompetitor,
@@ -73,5 +74,24 @@ describe("WEEKLY_MAIL_NOTE", () => {
   it("points every preview at the richer weekly mail", () => {
     expect(WEEKLY_MAIL_NOTE.toLowerCase()).toContain("weekly");
     expect(WEEKLY_MAIL_NOTE.toLowerCase()).toContain("email");
+  });
+});
+
+describe("foursquareRating", () => {
+  it("normalizes the 0-10 Foursquare scale to the product's 0-5 scale", () => {
+    expect(foursquareRating(8.7)).toBe(4.4);
+    expect(foursquareRating(10)).toBe(5);
+    expect(foursquareRating(9.2)).toBe(4.6);
+  });
+
+  it("passes through values already at or below 5", () => {
+    expect(foursquareRating(4.5)).toBe(4.5);
+    expect(foursquareRating(3)).toBe(3);
+  });
+
+  it("rejects missing or non-positive ratings", () => {
+    expect(foursquareRating(undefined)).toBeUndefined();
+    expect(foursquareRating(0)).toBeUndefined();
+    expect(foursquareRating(-1)).toBeUndefined();
   });
 });

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 // Remembered in the tab session so the mobile prompt doesn't reappear on every
 // navigation after the user dismisses it.
-const PROMPT_KEY = "localscope-legacy-mobile-prompt";
+const PROMPT_KEY = "thebizscope-legacy-mobile-prompt";
 
 const switchCls =
   "data-[state=checked]:bg-accent data-[state=unchecked]:bg-rule/70";

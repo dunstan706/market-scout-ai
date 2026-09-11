@@ -31,7 +31,7 @@ $center.LineAlignment = [System.Drawing.StringAlignment]::Center
 $wordmark = New-Object System.Drawing.Font("Georgia", 92, [System.Drawing.FontStyle]::Regular)
 $inkBrush = New-Object System.Drawing.SolidBrush($ink)
 $g.DrawString(
-  "Localscope.",
+  "theBizScope.",
   $wordmark,
   $inkBrush,
   (New-Object System.Drawing.RectangleF(0, 150, $w, 130)),

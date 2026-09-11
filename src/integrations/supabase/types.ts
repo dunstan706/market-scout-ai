@@ -54,6 +54,13 @@ export type Database = {
           business_type: string
           location: string | null
           price_point: string | null
+          google_place_id: string | null
+          paddle_customer_id: string | null
+          paddle_subscription_id: string | null
+          plan_tier: string
+          subscription_status: string | null
+          current_period_end: string | null
+          billing_cadence: string | null
           created_at: string
           updated_at: string
         }
@@ -63,6 +70,13 @@ export type Database = {
           business_type?: string
           location?: string | null
           price_point?: string | null
+          google_place_id?: string | null
+          paddle_customer_id?: string | null
+          paddle_subscription_id?: string | null
+          plan_tier?: string
+          subscription_status?: string | null
+          current_period_end?: string | null
+          billing_cadence?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -72,6 +86,13 @@ export type Database = {
           business_type?: string
           location?: string | null
           price_point?: string | null
+          google_place_id?: string | null
+          paddle_customer_id?: string | null
+          paddle_subscription_id?: string | null
+          plan_tier?: string
+          subscription_status?: string | null
+          current_period_end?: string | null
+          billing_cadence?: string | null
           created_at?: string
           updated_at?: string
         }

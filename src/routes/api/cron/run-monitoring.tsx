@@ -81,6 +81,10 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
               ? profile.business_type
               : "salon",
           location,
+          // Pin from a previous successful match, when present: the own-listing
+          // lookup targets the place ID directly instead of re-matching names.
+          googlePlaceId:
+            (profile as { google_place_id?: string | null }).google_place_id ?? undefined,
         };
 
         // Full mode: the weekly mail is where the Watch tier's richer,
@@ -117,6 +121,17 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
           snapshot: research as unknown as Json,
           detected_changes: changes as unknown as Json,
         });
+
+        // Pin the matched listing on the profile so future weekly runs key on
+        // the place ID instead of re-matching the typed name.
+        const matchedPlaceId = research.ownListingPlaceId ?? undefined;
+        if (matchedPlaceId && matchedPlaceId !== input.googlePlaceId) {
+          const { error: pinError } = await supabaseAdmin
+            .from("profiles")
+            .update({ google_place_id: matchedPlaceId })
+            .eq("id", profile.id);
+          if (pinError) console.error(`place id persist failed for profile ${profile.id}`, pinError.message);
+        }
 
         const { data: inserted, error: insertError } = await supabaseAdmin
           .from("briefs")

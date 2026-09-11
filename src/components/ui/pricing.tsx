@@ -100,6 +100,13 @@ export interface PricingPlan {
   buttonText: string;
   href: string;
   isPopular?: boolean;
+  /** Stable tier id used by billing ("watch" / "advise"); plans without one
+   *  (e.g. the quote-only Expand tier) never trigger checkout. */
+  tier?: "watch" | "advise";
+  /** Country-localized, tax-inclusive total from Paddle's pricing preview.
+   *  When present it replaces the USD base price display so the page shows
+   *  exactly what checkout will charge in the visitor's location. */
+  localizedTotal?: string;
 }
 
 interface PricingSectionProps {
@@ -114,12 +121,17 @@ interface PricingSectionProps {
   /** Tightens paddings and type so the section fits a viewport without
    *  scrolling — used inside the upgrade overlay. */
   compact?: boolean;
+  /** When provided, plan buttons call this instead of navigating to
+   *  `href` — used by the dashboard overlay to start Paddle checkout with
+   *  the currently selected billing cadence. */
+  onSelect?: ((plan: PricingPlan, isMonthly: boolean) => void) | undefined;
 }
 
 // Context for state management
 const PricingContext = createContext<{
   isMonthly: boolean;
   setIsMonthly: (value: boolean) => void;
+  onSelect?: ((plan: PricingPlan, isMonthly: boolean) => void) | undefined;
 }>({
   isMonthly: true,
   setIsMonthly: () => {},
@@ -133,11 +145,12 @@ export function PricingSection({
   description = "Choose the plan that's right for you. All plans include our core features and support.",
   className,
   compact = false,
+  onSelect,
 }: PricingSectionProps) {
   const [isMonthly, setIsMonthly] = useState(true);
 
   return (
-    <PricingContext.Provider value={{ isMonthly, setIsMonthly }}>
+    <PricingContext.Provider value={{ isMonthly, setIsMonthly, onSelect }}>
       <div
         className={cn(
           "relative w-full bg-background py-20 sm:py-24",
@@ -295,7 +308,7 @@ function PricingCard({
   index: number;
   compact?: boolean;
 }) {
-  const { isMonthly } = useContext(PricingContext);
+  const { isMonthly, onSelect } = useContext(PricingContext);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   const numericPrice = Number(plan.price);
@@ -348,7 +361,16 @@ function PricingCard({
           {plan.description}
         </p>
         <div className={cn("flex items-baseline justify-center gap-x-1", compact ? "mt-3" : "mt-6")}>
-          {hasFixedPrice ? (
+          {hasFixedPrice && plan.localizedTotal ? (
+            <span
+              className={cn(
+                "font-bold tracking-tight text-foreground",
+                compact ? "text-3xl" : "text-5xl",
+              )}
+            >
+              {plan.localizedTotal}
+            </span>
+          ) : hasFixedPrice ? (
             <>
               <span
                 className={cn(
@@ -402,18 +424,34 @@ function PricingCard({
         </ul>
 
         <div className={cn("mt-auto", compact ? "pt-4" : "pt-8")}>
-          <a
-            href={plan.href}
-            className={cn(
-              buttonVariants({
-                variant: plan.isPopular ? "default" : "outline",
-                size: compact ? "sm" : "lg",
-              }),
-              "w-full",
-            )}
-          >
-            {plan.buttonText}
-          </a>
+          {onSelect && plan.tier ? (
+            <button
+              type="button"
+              onClick={() => onSelect(plan, isMonthly)}
+              className={cn(
+                buttonVariants({
+                  variant: plan.isPopular ? "default" : "outline",
+                  size: compact ? "sm" : "lg",
+                }),
+                "w-full",
+              )}
+            >
+              {plan.buttonText}
+            </button>
+          ) : (
+            <a
+              href={plan.href}
+              className={cn(
+                buttonVariants({
+                  variant: plan.isPopular ? "default" : "outline",
+                  size: compact ? "sm" : "lg",
+                }),
+                "w-full",
+              )}
+            >
+              {plan.buttonText}
+            </a>
+          )}
         </div>
       </div>
     </motion.div>

@@ -5,6 +5,7 @@ import type { Json, Tables } from "@/integrations/supabase/types";
 import { BriefSchema } from "@/lib/brief-core";
 import { collectLocalResearch, type ResearchSnapshot } from "@/lib/local-research.server";
 import { describeBriefError, writeBrief } from "@/lib/brief-writer.server";
+import type { LocalizedPrice } from "@/lib/paddle.server";
 import {
   detectChanges,
   parseDetectedChanges,
@@ -363,6 +364,18 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
     > => {
       const userId = context.userId;
 
+      // Per-user rate limit on scans: each one spends real money (Google
+      // Places, secondary sources, website fetches, an LLM call). The public
+      // form is capped by IP; authenticated scans are capped by account.
+      const { checkRateLimit } = await import("@/lib/rate-limit.server");
+      const scanLimit = checkRateLimit(`scan:${userId}`, 10, 60 * 60 * 1000);
+      if (!scanLimit.allowed) {
+        return {
+          ok: false,
+          error: `You've run a lot of scans this hour — try again in about ${Math.ceil(scanLimit.retryAfterSeconds / 60)} minutes.`,
+        };
+      }
+
       const { data: profileRow } = await context.supabase
         .from("profiles")
         .select("*")
@@ -376,6 +389,9 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         businessName: profile.businessName,
         businessType: profile.businessType,
         location: profile.location,
+        // Pin from a previous successful match, when present: the own-listing
+        // lookup targets the place ID directly instead of re-matching names.
+        googlePlaceId: profileRow?.google_place_id ?? undefined,
       };
 
       let research: ResearchSnapshot;
@@ -408,14 +424,14 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
       const previous = historyAsc[historyAsc.length - 1] ?? null;
       const changes = detectChanges(previous, research);
 
-      let generated;
-      try {
-        generated = await writeBrief({ input, research, changes });
-      } catch (error) {
-        console.error("monitoring brief failed", error);
-        return { ok: false, error: describeBriefError(error) };
-      }
+      // Same treatment as the weekly cron: the market analysis (rating rank,
+      // price position, benchmarks) is computed from stored history and fed
+      // into the brief writer so dashboard briefs are as deep as the mail.
+      const analysis = buildMarketAnalysis(research, historyAsc, profile.pricePoint ?? null);
 
+      // Persist the snapshot BEFORE the LLM call: a failed/aborted brief
+      // generation must not discard the scan — the research was already paid
+      // for, and the next run should diff against this scan, not stale data.
       const { error: snapshotError } = await context.supabase
         .from("monitoring_snapshots")
         .insert({
@@ -427,6 +443,30 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
           detected_changes: changes as unknown as Json,
         });
       if (snapshotError) console.error("monitoring snapshot insert failed", snapshotError);
+
+      // Pin the matched listing on the profile: from here on, own-listing
+      // lookups key on the place ID and stop depending on the typed name
+      // (immune to typos, rebrands, and word-order differences).
+      const matchedPlaceId = research.ownListingPlaceId ?? undefined;
+      if (matchedPlaceId && matchedPlaceId !== input.googlePlaceId) {
+        const { error: pinError } = await context.supabase
+          .from("profiles")
+          .update({ google_place_id: matchedPlaceId })
+          .eq("id", userId);
+        if (pinError) {
+          console.error("google place id persist failed", pinError.message);
+        } else if (profileRow) {
+          profileRow.google_place_id = matchedPlaceId;
+        }
+      }
+
+      let generated;
+      try {
+        generated = await writeBrief({ input, research, changes, analysis });
+      } catch (error) {
+        console.error("monitoring brief failed", error);
+        return { ok: false, error: describeBriefError(error) };
+      }
 
       const brief = {
         ...generated,
@@ -452,7 +492,7 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         changes,
         monitoredAt: research.capturedAt,
         baseline: previous === null,
-        analysis: buildMarketAnalysis(research, historyAsc, profile.pricePoint ?? null),
+        analysis,
       };
     },
   );
@@ -548,9 +588,9 @@ export const sendTestBriefEmail = createServerFn({ method: "POST" })
           },
         ],
         recommendation: "This is a test email — your real weekly brief will arrive every Monday morning.",
-        why: "The email below uses the exact template Localscope sends for real briefs.",
-        sources: [{ label: "Localscope test", url: "https://localscope.lovable.app" }],
-        dashboardUrl: "https://localscope.lovable.app/dashboard",
+        why: "The email below uses the exact template theBizScope sends for real briefs.",
+        sources: [{ label: "theBizScope test", url: "https://thebizscope.com" }],
+        dashboardUrl: "https://thebizscope.com/dashboard",
       });
       const sent = await sendEmail({ to: email, subject, html, text });
       if (!sent.ok) return { ok: false, error: sent.error };
@@ -586,3 +626,171 @@ export const listBriefs = createServerFn({ method: "POST" })
     }
     return { briefs };
   });
+
+// --- Billing (Paddle) ---
+
+export type BillingStatus = {
+  paddleConnected: boolean;
+  planTier: "free" | "watch" | "advise";
+  /** Whether the subscription currently grants paid access — false for
+   *  canceled/paused even when the mapped tier is still populated. */
+  accessGranted: boolean;
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+  cadence: "monthly" | "yearly" | null;
+};
+
+// The signed-in user's plan + subscription state, straight from the profile
+// row that Paddle webhooks keep in sync. `paddleConnected` lets the UI decide
+// whether plan buttons start checkout or explain that billing is not set up.
+export const getBillingStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ status: BillingStatus }> => {
+    const { data } = await context.supabase
+      .from("profiles")
+      .select("plan_tier, subscription_status, current_period_end, billing_cadence")
+      .eq("id", context.userId)
+      .maybeSingle();
+
+    const row = (data ?? {}) as {
+      plan_tier?: string | null;
+      subscription_status?: string | null;
+      current_period_end?: string | null;
+      billing_cadence?: string | null;
+    };
+    const { subscriptionGrantsAccess } = await import("@/lib/paddle.server");
+    const planTier =
+      row.plan_tier === "watch" || row.plan_tier === "advise" ? row.plan_tier : "free";
+
+    return {
+      status: {
+        paddleConnected: Boolean(process.env["PADDLE_API_KEY"]),
+        planTier,
+        accessGranted: planTier === "free" ? false : subscriptionGrantsAccess(row.subscription_status),
+        subscriptionStatus: row.subscription_status ?? null,
+        currentPeriodEnd: row.current_period_end ?? null,
+        cadence:
+          row.billing_cadence === "yearly" ? "yearly" : row.billing_cadence === "monthly" ? "monthly" : null,
+      },
+    };
+  });
+
+const CheckoutInput = z.object({
+  tier: z.enum(["watch", "advise"]),
+  cadence: z.enum(["monthly", "yearly"]),
+});
+
+// Starts a Paddle hosted checkout for the chosen tier/cadence. The checkout
+// carries the signed-in user's id + email; the /api/webhooks/paddle endpoint
+// applies the plan to their profile after payment.
+export const startCheckout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => CheckoutInput.parse(input))
+  .handler(
+    async ({ data, context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
+      const { data: authData } = await context.supabase.auth.getUser();
+      const email = authData?.user?.email;
+      if (!email) return { ok: false, error: "Your account has no email — billing needs one." };
+
+      const { createPaddleCheckout, isPaddleConfigured } = await import("@/lib/paddle.server");
+      if (!isPaddleConfigured()) {
+        return { ok: false, error: "Billing is not set up yet. Add PADDLE_API_KEY to the environment." };
+      }
+      return createPaddleCheckout({
+        userId: context.userId,
+        userEmail: email,
+        tier: data.tier,
+        cadence: data.cadence,
+      });
+    },
+  );
+
+// Generates a short-lived link to Paddle's hosted customer portal where the
+// customer can manage payment methods, download invoices, and cancel. The
+// customer id always resolves server-side from the profile — never from the
+// client.
+export const openBillingPortal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async ({ context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
+      const { data } = await context.supabase
+        .from("profiles")
+        .select("paddle_customer_id")
+        .eq("id", context.userId)
+        .maybeSingle();
+      const customerId = (data as { paddle_customer_id?: string | null } | null)?.paddle_customer_id;
+      if (!customerId) {
+        return { ok: false, error: "No billing profile yet — subscribe to a plan first." };
+      }
+
+      const { createPaddlePortalSession } = await import("@/lib/paddle.server");
+      return createPaddlePortalSession({ paddleCustomerId: customerId });
+    },
+  );
+
+// --- Pricing page (Paddle.js + localized prices) ---
+
+// Public Paddle.js config for the pricing page's checkout overlay. Safe to
+// expose: the client token is designed for browser use, and price IDs are
+// public catalog identifiers.
+export const getPaddleEnv = createServerFn({ method: "POST" })
+  .handler(
+    async (): Promise<{
+      clientToken: string | null;
+      environment: "sandbox" | "live";
+      priceIds: {
+        watchMonthly: string | null;
+        watchYearly: string | null;
+        adviseMonthly: string | null;
+        adviseYearly: string | null;
+      };
+    }> => {
+      const { paddleClientToken, paddleApiBase, catalogPriceId } = await import("@/lib/paddle.server");
+      return {
+        clientToken: paddleClientToken() ?? null,
+        environment: paddleApiBase() === "https://api.paddle.com" ? "live" : "sandbox",
+        priceIds: {
+          watchMonthly: catalogPriceId("watch", "monthly") ?? null,
+          watchYearly: catalogPriceId("watch", "yearly") ?? null,
+          adviseMonthly: catalogPriceId("advise", "monthly") ?? null,
+          adviseYearly: catalogPriceId("advise", "yearly") ?? null,
+        },
+      };
+    },
+  );
+
+// Country-localized, tax-inclusive prices for the pricing page, resolved from
+// the visitor's IP so the displayed price matches what checkout will charge.
+export const previewLocalizedPricing = createServerFn({ method: "POST" })
+  .validator((input: { cadence?: "monthly" | "yearly" } | undefined) => ({
+    cadence: input?.cadence ?? ("monthly" as const),
+  }))
+  .handler(
+    async ({
+      data,
+    }: {
+      data: { cadence: "monthly" | "yearly" };
+    }): Promise<{
+      prices: LocalizedPrice[];
+      country: string | null;
+      error?: string | undefined;
+    }> => {
+      const { previewLocalizedPricing: preview, paddleApiKey } = await import("@/lib/paddle.server");
+      if (!paddleApiKey()) {
+        return { prices: [], country: null, error: "Billing is not set up yet." };
+      }
+
+      // Paddle geo-resolves the visitor's IP when no explicit country is
+      // given; local dev (no proxy headers) falls back to US.
+      const { getRequest } = await import("@tanstack/react-start/server");
+      const { clientIpFromRequest } = await import("@/lib/rate-limit.server");
+      const ip = clientIpFromRequest(getRequest());
+
+      const { prices, countryError } = await preview({
+        countryCode: null,
+        customerIp: ip,
+        cadence: data?.cadence ?? "monthly",
+      });
+      return { prices, country: null, error: countryError };
+    },
+  );

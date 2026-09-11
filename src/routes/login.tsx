@@ -6,8 +6,8 @@ import { AuthLayout, authButton, authInput } from "@/components/AuthLayout";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Log in — Localscope" },
-      { name: "description", content: "Log in to your Localscope dashboard." },
+      { title: "Log in — theBizScope" },
+      { name: "description", content: "Log in to your theBizScope dashboard." },
     ],
   }),
   component: LoginPage,

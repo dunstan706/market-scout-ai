@@ -1,4 +1,4 @@
-# Localscope — Setup & first-run guide
+# theBizScope — Setup & first-run guide
 
 How to take this repo from "built" to "working in Lovable Cloud". Everything
 below can be done without a local database or CLI — just the Supabase
@@ -202,7 +202,7 @@ users will see.
 | Secret | Value |
 |---|---|
 | `RESEND_API_KEY` | `re_…` from step 1 |
-| `RESEND_FROM` | Verified sender, e.g. `Localscope <briefs@yourdomain.com>` |
+| `RESEND_FROM` | Verified sender, e.g. `theBizScope <briefs@yourdomain.com>` |
 | `LOVABLE_CRON_SECRET` | A long random string (used by the scheduler) |
 
 Private keys always go in **Secrets**, never in `.env`.
@@ -218,7 +218,7 @@ missing or the sender is unverified — fix the message it shows and retry.
 
 ```bash
 # One manual run — processes every saved profile with a business + location:
-curl -X POST https://localscope.lovable.app/api/cron/run-monitoring \
+curl -X POST https://thebizscope.com/api/cron/run-monitoring \
   -H "Authorization: Bearer $LOVABLE_CRON_SECRET"
 # → {"ok":true,"processed":N,"emailed":N,"failed":[]}
 ```
@@ -238,3 +238,71 @@ double-send.
   without it the engine falls back to OpenStreetMap-only data.
 - **Generator says "try again in a few minutes"** → the per-IP rate limit
   (3 briefs / 15 min) is shared with the dashboard's scan button by design.
+
+## Step 4 — Paddle billing (subscriptions for Watch / Advise)
+
+Paddle is the merchant of record: it calculates and collects tax and hosts the
+checkout and customer portal. The app sells two tiers with inline pricing
+(no catalog setup required) and keeps each profile's `plan_tier` in sync via
+webhooks.
+
+### 1. Dashboard prerequisites (Paddle sandbox first)
+
+- **Default payment link** (required): Paddle → Checkout → Website approval →
+  set a default payment link (e.g. `thebizscope`). Transactions cannot be
+  created without it — Paddle rejects them with
+  `transaction_default_checkout_url_not_set`.
+- **API key** with `product` + `customer` + `transaction` read/write:
+  Developer tools → Authentication → API keys.
+- **Client-side token** (for the one-page overlay checkout on /pricing):
+  Developer tools → Authentication → Client-side tokens.
+
+### 2. Catalog (optional)
+
+Inline pricing works out of the box. Optionally create the catalog
+(Watch/Advise products, 4 prices) and store the `pri_...` IDs as
+`PADDLE_PRICE_*` secrets.
+
+### 3. Secrets (Lovable → Cloud → Secrets)
+
+| Secret | Value |
+|---|---|
+| `PADDLE_ENV` | `sandbox` (test) or `live` |
+| `PADDLE_API_KEY` | from step 1 |
+| `PADDLE_WEBHOOK_SECRET` | from step 4 |
+| `PADDLE_CLIENT_TOKEN` | Developer tools → Authentication → **Client-side tokens** (powers the one-page overlay checkout on /pricing) |
+| `PADDLE_PRICE_*` | optional catalog price IDs |
+
+### 4. Webhook endpoint — ALREADY CREATED
+
+A notification destination already exists in this sandbox account (created via
+the Paddle API):
+
+- ID: `ntfset_01m27k4n91rrp7b1zxj4czawvm`
+- URL: `https://thebizscope.com/api/webhooks/paddle`
+- Traffic source: platform + simulation (so webhook simulations hit it too)
+- Subscribed events: all `subscription.*` lifecycle events (created, updated,
+  canceled, activated, paused, resumed, past_due, trialing),
+  `customer.created/updated`, and `transaction.completed`
+- Signing secret: stored in `.env.local` as `PADDLE_WEBHOOK_SECRET` — copy it
+  to Lovable Secrets for deploys. Do not delete this destination; it is the
+  fulfillment path.
+
+The handler verifies the `Paddle-Signature` header (HMAC-SHA256 over
+`ts:body`, 5-minute replay window) before touching the database, maps the
+price amount back to a tier, and treats `active`/`trialing`/`past_due` as
+access-granting; `canceled`/`paused` revoke. A cancel webhook from an old
+subscription id is ignored so an out-of-order delivery can never strip a
+newer plan.
+
+### 5. Test a purchase
+
+Sandbox checkout accepts the standard test card: `4242 4242 4242 4242`, any
+future expiry, any CVC. Flow: dashboard → plans overlay (or landing pricing
+while signed in) → pick a plan → pay → the webhook flips your profile's
+`plan_tier`. Check it:
+
+```sql
+select id, plan_tier, billing_cadence, subscription_status
+from public.profiles order by updated_at desc limit 5;
+```

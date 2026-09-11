@@ -1,7 +1,7 @@
-// Email variants for Localscope briefs and alerts. Delivered through the
+// Email variants for theBizScope briefs and alerts. Delivered through the
 // Resend REST API (plain fetch — no SDK dependency). Requires RESEND_API_KEY
 // and RESEND_FROM (a verified sender on the Resend account, e.g.
-// "Localscope <briefs@localscope.app>").
+// "theBizScope <briefs@thebizscope.app>").
 //
 // Voice: the product says "We watch your local market. You just read the
 // brief." Emails are plain-spoken, warm and decisive — ranked signals, one
@@ -77,7 +77,7 @@ function digestOutro(signals: BriefEmailInput["signals"]): string {
 }
 
 function digestFooter(businessLabel: string): string {
-  return `You're receiving this because Localscope watches ${businessLabel}. Every signal links to a public source — check our work any time.`;
+  return `You're receiving this because theBizScope watches ${businessLabel}. Every signal links to a public source — check our work any time.`;
 }
 
 export function renderBriefEmail(input: BriefEmailInput): { subject: string; html: string; text: string } {
@@ -109,7 +109,7 @@ export function renderBriefEmail(input: BriefEmailInput): { subject: string; htm
     <div style="background:${BACKDROP};padding:32px 16px;">
       <div style="max-width:560px;margin:0 auto;background:${PAPER};border:1px solid ${INK};border-radius:4px;padding:32px;">
         <div style="border-bottom:2px solid ${INK};padding-bottom:16px;">
-          <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:${MUTED};">Localscope · Weekly market brief</div>
+          <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:${MUTED};">theBizScope · Weekly market brief</div>
           <div style="font-family:Georgia,serif;font-size:26px;line-height:1.2;margin-top:6px;">${escapeHtml(input.title)}</div>
         </div>
         <p style="font-size:14px;line-height:1.6;color:${INK};margin:18px 0 0;">${escapeHtml(intro)}</p>
@@ -121,7 +121,7 @@ export function renderBriefEmail(input: BriefEmailInput): { subject: string; htm
         </div>
         <div style="margin-top:22px;border-top:1px solid ${RULE};padding-top:14px;">
           <div style="font-size:14px;line-height:1.6;color:${INK};">${escapeHtml(outro)}</div>
-          <div style="font-family:Georgia,serif;font-size:16px;color:${INK};margin-top:12px;">— the Localscope team</div>
+          <div style="font-family:Georgia,serif;font-size:16px;color:${INK};margin-top:12px;">— the theBizScope team</div>
           <div style="font-size:12px;color:${TONE_COLOR.amber};margin-top:2px;">We watch your local market. You just read the brief.</div>
         </div>
         ${sourceLinks ? `<div style="margin-top:22px;border-top:1px solid ${RULE};padding-top:12px;font-size:12px;">Sources checked:<br>${sourceLinks}</div>` : ""}
@@ -131,12 +131,12 @@ export function renderBriefEmail(input: BriefEmailInput): { subject: string; htm
       </div>
       <p style="max-width:560px;margin:14px auto 0;font-size:11px;color:${FAINT};text-align:center;line-height:1.5;">
         ${escapeHtml(digestFooter(input.title.split(",")[0] ?? "your business"))}<br />
-        Localscope — AI market research for local businesses. Sources are public and may be incomplete.
+        theBizScope — AI market research for local businesses. Sources are public and may be incomplete.
       </p>
     </div>`;
 
   const text = [
-    `Localscope · Weekly market brief — ${input.title}`,
+    `theBizScope · Weekly market brief — ${input.title}`,
     "",
     intro,
     "",
@@ -147,14 +147,14 @@ export function renderBriefEmail(input: BriefEmailInput): { subject: string; htm
     `Why: ${input.why}`,
     "",
     outro,
-    "— the Localscope team",
+    "— the theBizScope team",
     "We watch your local market. You just read the brief.",
     "",
     `Open your dashboard: ${input.dashboardUrl}`,
     digestFooter(input.title.split(",")[0] ?? "your business"),
   ].join("\n");
 
-  return { subject: `Your Localscope brief — ${input.title}`, html, text };
+  return { subject: `Your theBizScope brief — ${input.title}`, html, text };
 }
 
 // =====================================================================
@@ -239,7 +239,7 @@ function alertCopy(input: MarketAlertInput): AlertCopy {
       };
     default:
       return {
-        eyebrow: "Localscope · market alert",
+        eyebrow: "theBizScope · market alert",
         subject: `${subjectPrefix}A market update for you`,
         body: "Something changed in your market. Details below — and what we'd do about it.",
       };
@@ -266,7 +266,7 @@ export function renderMarketAlert(input: MarketAlertInput): { subject: string; h
         </div>
       </div>
       <p style="max-width:520px;margin:14px auto 0;font-size:11px;color:${FAINT};text-align:center;line-height:1.5;">
-        Sent because Localscope watches ${escapeHtml(business)} for you between your weekly briefs.
+        Sent because theBizScope watches ${escapeHtml(business)} for you between your weekly briefs.
       </p>
     </div>`;
 
@@ -278,7 +278,7 @@ export function renderMarketAlert(input: MarketAlertInput): { subject: string; h
     "",
     `${input.actionLabel}: ${input.actionUrl}`,
     `Open your dashboard: ${input.dashboardUrl}`,
-    `Sent because Localscope watches ${business} between your weekly briefs.`,
+    `Sent because theBizScope watches ${business} between your weekly briefs.`,
   ].join("\n");
 
   return { subject: copy.subject, html, text };
@@ -314,7 +314,7 @@ export async function sendEmail(payload: {
     return {
       ok: false,
       error:
-        "RESEND_FROM is not set — add a verified sender in Lovable Secrets, e.g. \"Localscope <briefs@yourdomain.com>\".",
+        "RESEND_FROM is not set — add a verified sender in Lovable Secrets, e.g. \"theBizScope <briefs@yourdomain.com>\".",
     };
   }
   if (!/^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(payload.to)) {
@@ -323,7 +323,7 @@ export async function sendEmail(payload: {
   if (!from.includes("@") || !from.includes("<")) {
     return {
       ok: false,
-      error: `RESEND_FROM looks malformed ("${from}") — use the format "Localscope <briefs@yourdomain.com>".`,
+      error: `RESEND_FROM looks malformed ("${from}") — use the format "theBizScope <briefs@yourdomain.com>".`,
     };
   }
   try {

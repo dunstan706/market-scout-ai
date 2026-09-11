@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildEvidenceBrief,
   formatDistance,
+  isPublicWebsiteUrl,
   isSameCompetitor,
   mergeCompetitors,
   namesLikelyMatch,
@@ -62,6 +63,36 @@ describe("normalizeName", () => {
   });
 });
 
+describe("isPublicWebsiteUrl", () => {
+  it("allows public http(s) URLs", () => {
+    expect(isPublicWebsiteUrl("https://glowstudio.example.com")).toBe(true);
+    expect(isPublicWebsiteUrl("http://glowstudio.co.uk/prices")).toBe(true);
+    expect(isPublicWebsiteUrl("https://8.8.8.8/page")).toBe(true);
+  });
+
+  it("blocks non-http schemes", () => {
+    expect(isPublicWebsiteUrl("file:///etc/passwd")).toBe(false);
+    expect(isPublicWebsiteUrl("ftp://example.com")).toBe(false);
+  });
+
+  it("blocks loopback, private, link-local, and internal hosts", () => {
+    expect(isPublicWebsiteUrl("http://localhost:8080")).toBe(false);
+    expect(isPublicWebsiteUrl("http://127.0.0.1/admin")).toBe(false);
+    expect(isPublicWebsiteUrl("http://10.0.0.5/")).toBe(false);
+    expect(isPublicWebsiteUrl("http://172.16.1.1/")).toBe(false);
+    expect(isPublicWebsiteUrl("http://192.168.1.20/")).toBe(false);
+    expect(isPublicWebsiteUrl("http://169.254.169.254/latest/meta-data")).toBe(false);
+    expect(isPublicWebsiteUrl("http://server.internal/")).toBe(false);
+    expect(isPublicWebsiteUrl("http://[::1]/")).toBe(false);
+    expect(isPublicWebsiteUrl("http://[fd00::1]/")).toBe(false);
+  });
+
+  it("blocks malformed URLs", () => {
+    expect(isPublicWebsiteUrl("not a url")).toBe(false);
+    expect(isPublicWebsiteUrl("")).toBe(false);
+  });
+});
+
 describe("namesLikelyMatch", () => {
   it("matches exact names after normalization", () => {
     expect(namesLikelyMatch("Glow Studio", "Glow Studio")).toBe(true);
@@ -74,6 +105,24 @@ describe("namesLikelyMatch", () => {
 
   it("rejects empty names", () => {
     expect(namesLikelyMatch("", "Glow Studio")).toBe(false);
+  });
+
+  it("matches names with reordered or dropped words", () => {
+    expect(namesLikelyMatch("Hair by Sam", "Sam's Hair Studio")).toBe(true);
+    expect(namesLikelyMatch("Blow Dry Bar", "The Blow Dry Bar & Co")).toBe(true);
+  });
+
+  it("matches near-identical names with a typo", () => {
+    expect(namesLikelyMatch("Radiance Salon", "Raddiance Salon")).toBe(true);
+  });
+
+  it("matches shortened/nicknamed first names", () => {
+    expect(namesLikelyMatch("Sam's Salon", "Samantha's Salon")).toBe(true);
+  });
+
+  it("keeps distinct category names apart despite shared words", () => {
+    expect(namesLikelyMatch("Hair Studio", "Nail Studio")).toBe(false);
+    expect(namesLikelyMatch("Anna Nails", "Anna Spa")).toBe(false);
   });
 });
 

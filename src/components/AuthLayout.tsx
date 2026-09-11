@@ -23,7 +23,7 @@ export function AuthLayout({
           to="/"
           className="animate-fade block text-center font-serif text-3xl tracking-tight"
         >
-          Localscope<span className="text-accent">.</span>
+          theBizScope<span className="text-accent">.</span>
         </Link>
         <div className="paper-card animate-rise mt-6 rounded-md p-7 shadow-lift [animation-delay:120ms]">
           <p className="eyebrow">{eyebrow}</p>

@@ -1,4 +1,4 @@
-# Localscope — To-do list
+# theBizScope — To-do list
 
 Everything that still needs doing, grouped by priority. Resend/email items are
 quarantined at the bottom ("on hold") — see the note there before picking them
@@ -112,7 +112,7 @@ with zero research cost. `SETUP.md → Step 3` is the enable+verify runbook.
 Decision from the pricing discussion: the $15 tier stays as-is (one business,
 weekly digest + market snapshot + basics). The **$50 tier is not just "5
 businesses"** — it's alerts-first: the same market briefs as $15, plus
-Localscope emails you the moment something important happens to *your*
+theBizScope emails you the moment something important happens to *your*
 business between weekly digests. Agreed direction — build only after the $15
 loop is proven with real users.
 

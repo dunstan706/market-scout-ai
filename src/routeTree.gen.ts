@@ -13,11 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DashboardtestRouteImport } from './routes/dashboardtest'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as RefundRouteImport } from './routes/refund'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiCronRunMonitoringRouteImport } from './routes/api/cron/run-monitoring'
+import { Route as ApiWebhooksPaddleRouteImport } from './routes/api/webhooks/paddle'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -39,6 +42,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -47,6 +55,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RefundRoute = RefundRouteImport.update({
+  id: '/refund',
+  path: '/refund',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -64,28 +77,39 @@ const ApiCronRunMonitoringRoute = ApiCronRunMonitoringRouteImport.update({
   path: '/api/cron/run-monitoring',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhooksPaddleRoute = ApiWebhooksPaddleRouteImport.update({
+  id: '/api/webhooks/paddle',
+  path: '/api/webhooks/paddle',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
+  '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
+  '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
+  '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
+  '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -93,11 +117,14 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
+  '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
+  '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -106,33 +133,42 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
+    | '/pricing'
     | '/privacy'
     | '/profile'
+    | '/refund'
     | '/signup'
     | '/terms'
     | '/api/cron/run-monitoring'
+    | '/api/webhooks/paddle'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
+    | '/pricing'
     | '/privacy'
     | '/profile'
+    | '/refund'
     | '/signup'
     | '/terms'
     | '/api/cron/run-monitoring'
+    | '/api/webhooks/paddle'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
+    | '/pricing'
     | '/privacy'
     | '/profile'
+    | '/refund'
     | '/signup'
     | '/terms'
     | '/api/cron/run-monitoring'
+    | '/api/webhooks/paddle'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -140,11 +176,14 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   DashboardtestRoute: typeof DashboardtestRoute
   LoginRoute: typeof LoginRoute
+  PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   ProfileRoute: typeof ProfileRoute
+  RefundRoute: typeof RefundRoute
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
   ApiCronRunMonitoringRoute: typeof ApiCronRunMonitoringRoute
+  ApiWebhooksPaddleRoute: typeof ApiWebhooksPaddleRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -177,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -189,6 +235,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/refund': {
+      id: '/refund'
+      path: '/refund'
+      fullPath: '/refund'
+      preLoaderRoute: typeof RefundRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -212,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronRunMonitoringRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/paddle': {
+      id: '/api/webhooks/paddle'
+      path: '/api/webhooks/paddle'
+      fullPath: '/api/webhooks/paddle'
+      preLoaderRoute: typeof ApiWebhooksPaddleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -220,11 +280,14 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DashboardtestRoute: DashboardtestRoute,
   LoginRoute: LoginRoute,
+  PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   ProfileRoute: ProfileRoute,
+  RefundRoute: RefundRoute,
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
   ApiCronRunMonitoringRoute: ApiCronRunMonitoringRoute,
+  ApiWebhooksPaddleRoute: ApiWebhooksPaddleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

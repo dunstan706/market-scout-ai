@@ -82,7 +82,7 @@ async function writeAiBrief({ input, research, changes, analysis }: BriefWriterO
   // signals without inventing numbers.
   const marketBlock = analysis ? analysisForPrompt(analysis) : "";
 
-  const prompt = `You are Localscope, an AI local-market analyst for small businesses.
+  const prompt = `You are theBizScope, an AI local-market analyst for small businesses.
 Write a Weekly Market Brief for this business:
 - Name: ${input.businessName}
 - Type: ${input.businessType}

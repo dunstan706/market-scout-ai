@@ -78,7 +78,7 @@ describe("renderBriefEmail — weekly digest", () => {
     const { html, text } = renderBriefEmail(sampleOverrides());
     expect(html).toContain("We watch your local market. You just read the brief.");
     expect(text).toContain("We watch your local market. You just read the brief.");
-    expect(text).toContain("the Localscope team");
+    expect(text).toContain("the theBizScope team");
   });
 
   it("escapes HTML in titles, headlines and details", () => {
@@ -222,7 +222,7 @@ describe("sendEmail", () => {
 
   it("refuses an invalid recipient before calling the API", async () => {
     vi.stubEnv("RESEND_API_KEY", "re_test");
-    vi.stubEnv("RESEND_FROM", "Localscope <briefs@example.com>");
+    vi.stubEnv("RESEND_FROM", "theBizScope <briefs@example.com>");
     const result = await sendEmail({ to: "not-an-email", subject: "s", html: "<p>hi</p>", text: "hi" });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("invalid email");

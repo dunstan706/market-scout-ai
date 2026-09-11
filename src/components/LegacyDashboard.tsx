@@ -340,7 +340,7 @@ export function LegacyDashboard() {
             <p className="eyebrow">Setup required</p>
             <h1 className="mt-3 font-serif text-3xl">Your database isn&apos;t ready yet</h1>
             <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Localscope stores your profile, scans, and briefs in database tables that the setup
+              theBizScope stores your profile, scans, and briefs in database tables that the setup
               migrations create. They haven&apos;t been applied yet, so saving your profile and running
               scans would fail.
             </p>
@@ -888,7 +888,7 @@ function PageShell({
       <AnimatedNavFramer
         logo={
           <Link to="/" className="whitespace-nowrap font-serif text-xl tracking-tight sm:text-2xl">
-            Localscope<span className="text-accent">.</span>
+            theBizScope<span className="text-accent">.</span>
           </Link>
         }
         items={navItems}

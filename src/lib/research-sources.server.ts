@@ -51,7 +51,7 @@ const RESULT_CAPS = {
 
 const SECONDARY_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const NEARBY_RADIUS_METERS = 5_000;
-const USER_AGENT = "Localscope/1.0 (local market research demo)";
+const USER_AGENT = "theBizScope/1.0 (local market research demo)";
 
 const FOURSQUARE_V3_URL = "https://api.foursquare.com/v3/places/search";
 const FOURSQUARE_V2_URL = "https://api.foursquare.com/v2/venues/search";
@@ -94,14 +94,69 @@ function number(value: unknown): number | undefined {
 
 // --- Identity helpers (kept in sync with local-research.server.ts) ---
 
+const NAME_STOPWORDS = /\b(the|salon|spa|ltd|limited|llc|inc)\b/g;
+
 function normalizeName(value: string): string {
   return value
     .toLocaleLowerCase()
+    .replace(/'s\b/g, " ")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(the|salon|spa|ltd|limited|llc|inc)\b/g, " ")
+    .replace(NAME_STOPWORDS, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(value.split(" ").filter(Boolean));
+}
+
+// Fraction of the larger name's tokens covered by the smaller name's tokens,
+// with partial (0.75) credit for prefix/nickname matches like "sam" vs
+// "samantha" and near-identical tokens like "raddiance" vs "radiance".
+// Tolerates word order, dropped words, shortened first names, and typos —
+// while keeping genuinely distinct names ("Hair Studio" vs "Nail Studio")
+// apart, because whole-string edit distance would wrongly merge those.
+function tokenCoverage(aTokens: Set<string>, bTokens: Set<string>): number {
+  const larger = aTokens.size >= bTokens.size ? aTokens : bTokens;
+  const smaller = aTokens === larger ? bTokens : aTokens;
+  if (larger.size === 0) return 0;
+  let matched = 0;
+  for (const token of smaller) {
+    if (larger.has(token)) {
+      matched += 1;
+      continue;
+    }
+    let best = 0;
+    for (const other of larger) {
+      const min = Math.min(token.length, other.length);
+      if (min >= 3 && (token.startsWith(other) || other.startsWith(token))) {
+        best = Math.max(best, 0.75);
+        continue;
+      }
+      if (min >= 3 && editDistance(token, other) / Math.max(token.length, other.length) <= 0.25) {
+        best = Math.max(best, 0.75);
+      }
+    }
+    matched += best;
+  }
+  return matched / larger.size;
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current: number[] = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const insert = current[j - 1]! + 1;
+      const remove = previous[j]! + 1;
+      const replace = previous[j - 1]! + cost;
+      current[j] = Math.min(insert, remove, replace);
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
 }
 
 function namesLikelyMatch(a: string, b: string): boolean {
@@ -109,7 +164,13 @@ function namesLikelyMatch(a: string, b: string): boolean {
   const right = normalizeName(b);
   if (!left || !right) return false;
   if (left === right) return true;
-  return left.includes(right) || right.includes(left);
+  // A longer full name containing the shorter one ("Radiance" inside
+  // "Radiance Studio"). Guarded by length so short words like "Anna" don't
+  // collapse distinct names ("Anna Nails" vs "Anna Spa" -> "anna").
+  if (Math.min(left.length, right.length) >= 5 && (left.includes(right) || right.includes(left))) {
+    return true;
+  }
+  return tokenCoverage(tokenSet(left), tokenSet(right)) >= 0.6;
 }
 
 function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
@@ -225,6 +286,15 @@ function foursquarePriceTier(tier: number | undefined): string | undefined {
   return "$".repeat(Math.min(tier, 4));
 }
 
+// Foursquare rates venues on a 0–10 scale; every other source (and the whole
+// product) speaks 0–5. Normalize at the boundary so FSQ-only venues don't
+// show "8.7/5" or inflate rating medians. Exported for tests.
+export function foursquareRating(value: number | undefined): number | undefined {
+  const rating = number(value);
+  if (rating === undefined || rating <= 0) return undefined;
+  return Math.round((rating > 5 ? rating / 2 : rating) * 10) / 10;
+}
+
 async function fetchFoursquare(
   location: { latitude: number; longitude: number },
   businessType: string,
@@ -263,7 +333,7 @@ async function fetchFoursquare(
           ...(text(place.tel) ? { phone: text(place.tel) } : {}),
           ...(foursquarePriceTier(place.price) ? { priceLevel: foursquarePriceTier(place.price) } : {}),
           priceSamples: [],
-          ...(number(place.rating) !== undefined ? { rating: number(place.rating) } : {}),
+          ...(foursquareRating(place.rating) !== undefined ? { rating: foursquareRating(place.rating) } : {}),
           sourceUrl: place.fsq_id
             ? `https://foursquare.com/v/${place.fsq_id}`
             : `https://foursquare.com/explore?ll=${latitude},${longitude}&q=${encodeURIComponent(name)}`,
@@ -302,7 +372,7 @@ async function fetchFoursquare(
           ...(text(venue.contact?.phone) ? { phone: text(venue.contact?.phone) } : {}),
           ...(foursquarePriceTier(venue.price?.tier) ? { priceLevel: foursquarePriceTier(venue.price?.tier) } : {}),
           priceSamples: [],
-          ...(number(venue.rating) !== undefined ? { rating: number(venue.rating) } : {}),
+          ...(foursquareRating(venue.rating) !== undefined ? { rating: foursquareRating(venue.rating) } : {}),
           sourceUrl: venue.id
             ? `https://foursquare.com/v/${venue.id}`
             : `https://foursquare.com/explore?ll=${latitude},${longitude}&q=${encodeURIComponent(name)}`,

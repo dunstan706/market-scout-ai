@@ -312,6 +312,25 @@ describe("parseResearchSnapshot — own listing round-trip", () => {
     expect(parsed?.ownListing?.reviews?.[0]?.text).toBe("Lovely.");
   });
 
+  it("preserves the matched place id and top-level pin through JSON storage", () => {
+    const stored = {
+      location: { displayName: "Shoreditch, London", latitude: 51.52, longitude: -0.08 },
+      competitors: [],
+      ownListing: {
+        name: "Radiance Salon",
+        placeId: " ChIJrTLr-KyuEmsRBSc9p3uTPms ",
+        rating: 4.8,
+      },
+      ownListingPlaceId: "ChIJrTLr-KyuEmsRBSc9p3uTPms",
+      sources: [],
+      warnings: [],
+      capturedAt: "2026-09-01T08:00:00.000Z",
+    };
+    const parsed = parseResearchSnapshot(JSON.parse(JSON.stringify(stored)));
+    expect(parsed?.ownListing?.placeId).toBe("ChIJrTLr-KyuEmsRBSc9p3uTPms");
+    expect(parsed?.ownListingPlaceId).toBe("ChIJrTLr-KyuEmsRBSc9p3uTPms");
+  });
+
   it("still parses older snapshots without an own listing", () => {
     const parsed = parseResearchSnapshot(JSON.parse(JSON.stringify(snapshot([glow()]))));
     expect(parsed?.ownListing).toBeUndefined();

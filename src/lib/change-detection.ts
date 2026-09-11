@@ -46,6 +46,10 @@ export const ResearchSnapshotSchema = z.object({
   ownListing: z
     .object({
       name: z.string(),
+      placeId: z
+        .string()
+        .trim()
+        .optional(),
       rating: z.number().optional(),
       reviewCount: z.number().optional(),
       url: z.string().optional(),
@@ -83,6 +87,9 @@ export const ResearchSnapshotSchema = z.object({
   ),
   sources: z.array(z.object({ label: z.string(), url: z.string(), kind: z.string() })),
   warnings: z.array(z.string()),
+  // Persisted match pin (see local-research.server.ts); absent on snapshots
+  // captured before this field existed.
+  ownListingPlaceId: z.string().trim().optional(),
   capturedAt: z.string(),
 });
 
@@ -98,14 +105,69 @@ export function parseResearchSnapshot(value: unknown): ResearchSnapshot | null {
 // local-research.server.ts — same rules: name match plus coordinates within
 // 150 m, or a distance delta within 250 m when coordinates are missing). ---
 
+const NAME_STOPWORDS = /\b(the|salon|spa|ltd|limited|llc|inc)\b/g;
+
 function normalizeName(value: string): string {
   return value
     .toLocaleLowerCase()
+    .replace(/'s\b/g, " ")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(the|salon|spa|ltd|limited|llc|inc)\b/g, " ")
+    .replace(NAME_STOPWORDS, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(value.split(" ").filter(Boolean));
+}
+
+// Fraction of the larger name's tokens covered by the smaller name's tokens,
+// with partial (0.75) credit for prefix/nickname matches like "sam" vs
+// "samantha" and near-identical tokens like "raddiance" vs "radiance".
+// Tolerates word order, dropped words, shortened first names, and typos —
+// while keeping genuinely distinct names ("Hair Studio" vs "Nail Studio")
+// apart, because whole-string edit distance would wrongly merge those.
+function tokenCoverage(aTokens: Set<string>, bTokens: Set<string>): number {
+  const larger = aTokens.size >= bTokens.size ? aTokens : bTokens;
+  const smaller = aTokens === larger ? bTokens : aTokens;
+  if (larger.size === 0) return 0;
+  let matched = 0;
+  for (const token of smaller) {
+    if (larger.has(token)) {
+      matched += 1;
+      continue;
+    }
+    let best = 0;
+    for (const other of larger) {
+      const min = Math.min(token.length, other.length);
+      if (min >= 3 && (token.startsWith(other) || other.startsWith(token))) {
+        best = Math.max(best, 0.75);
+        continue;
+      }
+      if (min >= 3 && editDistance(token, other) / Math.max(token.length, other.length) <= 0.25) {
+        best = Math.max(best, 0.75);
+      }
+    }
+    matched += best;
+  }
+  return matched / larger.size;
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current: number[] = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const insert = current[j - 1]! + 1;
+      const remove = previous[j]! + 1;
+      const replace = previous[j - 1]! + cost;
+      current[j] = Math.min(insert, remove, replace);
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
 }
 
 function namesLikelyMatch(a: string, b: string): boolean {
@@ -113,7 +175,13 @@ function namesLikelyMatch(a: string, b: string): boolean {
   const right = normalizeName(b);
   if (!left || !right) return false;
   if (left === right) return true;
-  return left.includes(right) || right.includes(left);
+  // A longer full name containing the shorter one ("Radiance" inside
+  // "Radiance Studio"). Guarded by length so short words like "Anna" don't
+  // collapse distinct names ("Anna Nails" vs "Anna Spa" -> "anna").
+  if (Math.min(left.length, right.length) >= 5 && (left.includes(right) || right.includes(left))) {
+    return true;
+  }
+  return tokenCoverage(tokenSet(left), tokenSet(right)) >= 0.6;
 }
 
 function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
