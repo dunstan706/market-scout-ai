@@ -14,6 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
+      briefs: {
+        Row: {
+          brief: Json
+          business_name: string
+          business_type: string
+          created_at: string
+          emailed_at: string | null
+          id: string
+          location: string
+          user_id: string
+        }
+        Insert: {
+          brief: Json
+          business_name: string
+          business_type?: string
+          created_at?: string
+          emailed_at?: string | null
+          id?: string
+          location: string
+          user_id: string
+        }
+        Update: {
+          brief?: Json
+          business_name?: string
+          business_type?: string
+          created_at?: string
+          emailed_at?: string | null
+          id?: string
+          location?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      monitoring_snapshots: {
+        Row: {
+          business_name: string
+          business_type: string
+          created_at: string
+          detected_changes: Json
+          id: string
+          location: string
+          snapshot: Json
+          user_id: string
+        }
+        Insert: {
+          business_name: string
+          business_type?: string
+          created_at?: string
+          detected_changes?: Json
+          id?: string
+          location: string
+          snapshot: Json
+          user_id: string
+        }
+        Update: {
+          business_name?: string
+          business_type?: string
+          created_at?: string
+          detected_changes?: Json
+          id?: string
+          location?: string
+          snapshot?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          billing_cadence: string | null
+          business_name: string | null
+          business_type: string
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          id: string
+          location: string | null
+          plan_tier: string
+          price_point: string | null
+          stripe_customer_id: string | null
+          subscription_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_cadence?: string | null
+          business_name?: string | null
+          business_type?: string
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          id: string
+          location?: string | null
+          plan_tier?: string
+          price_point?: string | null
+          stripe_customer_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_cadence?: string | null
+          business_name?: string | null
+          business_type?: string
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          location?: string | null
+          plan_tier?: string
+          price_point?: string | null
+          stripe_customer_id?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       waitlist_signups: {
         Row: {
           business_name: string | null
@@ -44,123 +158,6 @@ export type Database = {
           id?: string
           notes?: string | null
           user_id?: string | null
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          id: string
-          business_name: string | null
-          business_type: string
-          location: string | null
-          price_point: string | null
-          google_place_id: string | null
-          paddle_customer_id: string | null
-          paddle_subscription_id: string | null
-          plan_tier: string
-          subscription_status: string | null
-          current_period_end: string | null
-          billing_cadence: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          business_name?: string | null
-          business_type?: string
-          location?: string | null
-          price_point?: string | null
-          google_place_id?: string | null
-          paddle_customer_id?: string | null
-          paddle_subscription_id?: string | null
-          plan_tier?: string
-          subscription_status?: string | null
-          current_period_end?: string | null
-          billing_cadence?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          business_name?: string | null
-          business_type?: string
-          location?: string | null
-          price_point?: string | null
-          google_place_id?: string | null
-          paddle_customer_id?: string | null
-          paddle_subscription_id?: string | null
-          plan_tier?: string
-          subscription_status?: string | null
-          current_period_end?: string | null
-          billing_cadence?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      briefs: {
-        Row: {
-          id: string
-          user_id: string
-          business_name: string
-          business_type: string
-          location: string
-          brief: Json
-          emailed_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          business_name: string
-          business_type?: string
-          location: string
-          brief: Json
-          emailed_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          business_name?: string
-          business_type?: string
-          location?: string
-          brief?: Json
-          emailed_at?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      monitoring_snapshots: {
-        Row: {
-          id: string
-          user_id: string
-          business_name: string
-          business_type: string
-          location: string
-          snapshot: Json
-          detected_changes: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          business_name: string
-          business_type?: string
-          location: string
-          snapshot: Json
-          detected_changes?: Json
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          business_name?: string
-          business_type?: string
-          location?: string
-          snapshot?: Json
-          detected_changes?: Json
-          created_at?: string
         }
         Relationships: []
       }
