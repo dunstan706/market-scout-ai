@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789138404613,
+      "tag": "0000_ensure_profiles_google_place_id",
+      "breakpoints": true
+    }
+  ]
+}
