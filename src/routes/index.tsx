@@ -263,7 +263,6 @@ function Index() {
               </ul>
               <LandingPlanCta
                 tier={p.name === "Watch" ? "watch" : p.name === "Advise" ? "advise" : null}
-                featured={Boolean(p.featured)}
                 fallbackHref="/signup"
                 fallbackLabel={p.cta}
               />

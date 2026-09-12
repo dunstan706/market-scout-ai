@@ -134,10 +134,7 @@ function PricingPage() {
   const resumedRef = useRef(false);
   useEffect(() => {
     if (resumedRef.current) return;
-    // TEMP (checkout testing): resume fires without a session so the plan
-    // params can be tested logged-out too. Restore the userEmail check with
-    // the signup gate.
-    if (!resumeTier || !resumeCadence || !paddleReady) return;
+    if (!resumeTier || !resumeCadence || !userEmail || !paddleReady) return;
     resumedRef.current = true;
     openCheckout({ tier: resumeTier, cadence: resumeCadence, email: userEmail, userId }).finally(
       () => {
@@ -175,12 +172,16 @@ function PricingPage() {
   const handleSelect = useCallback(
     async (plan: PricingPlan, monthly: boolean) => {
       if (!plan.tier) return;
-      // TEMP (checkout testing): the "sign up to subscribe" gate is removed so
-      // logged-out visitors can subscribe directly — Paddle collects the email
-      // in the overlay. NOTE: without a session there is no user_id in
-      // customData, so the webhook cannot attach the plan to a profile. Test
-      // the plan-flip while logged in. Restore once resolved:
-      //   if (!userEmail) { await router.navigate({ to: "/signup", search: { tier: plan.tier, cadence: monthly ? "monthly" : "yearly" } }); return; }
+      // Logged-out visitors sign up first; the picked plan rides along in the
+      // URL and the dashboard's plans overlay takes it from there after
+      // account creation.
+      if (!userEmail) {
+        await router.navigate({
+          to: "/signup",
+          search: { tier: plan.tier, cadence: monthly ? "monthly" : "yearly" },
+        });
+        return;
+      }
       if (!paddleReady) {
         setNotice(paddleError || "Checkout is loading — one moment.");
         return;
