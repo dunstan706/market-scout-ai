@@ -111,62 +111,12 @@ export async function paddleRequest<T>(
   }
 }
 
-export type CheckoutResult = { ok: true; url: string } | { ok: false; error: string };
-
-// Creates a subscription checkout for the chosen tier/cadence and returns the
-// hosted checkout URL. Uses the catalog price ID when configured, otherwise
-// inline (non-catalog) pricing — both map back through PLAN_BY_PRICE at the
-// webhook because the amounts are identical. `userId` rides through
-// custom_data → webhook so the plan lands on the right profile.
-export async function createPaddleCheckout(options: {
-  userId: string;
-  userEmail: string;
-  tier: PaddleTier;
-  cadence: PaddleCadence;
-}): Promise<CheckoutResult> {
-  const amount = PADDLE_PRICES[options.tier][options.cadence];
-  const name = options.tier === "watch" ? "theBizScope Watch" : "theBizScope Advise";
-  const description =
-    options.tier === "watch"
-      ? "Weekly market briefs for one business: competitor prices, reviews, opening hours, and new local developments."
-      : "Everything in Watch for up to 5 businesses: real-time market alerts, price-position analysis, richer weekly briefs.";
-
-  const catalogPriceId = catalogPriceFor(options.tier, options.cadence);
-  const item = catalogPriceId
-    ? { quantity: 1, price_id: catalogPriceId }
-    : {
-        quantity: 1,
-        price: {
-          description: `${name} (${options.cadence})`,
-          type: "standard",
-          tax_category: "saas",
-          unit_price: { amount: String(amount), currency_code: "USD" },
-          billing_cycle:
-            options.cadence === "yearly"
-              ? { interval: "year", frequency: 1 }
-              : { interval: "month", frequency: 1 },
-          product: { name, tax_category: "saas" },
-        },
-      };
-
-  const { data, error } = await paddleRequest<{ id: string; checkout_url?: string }>("POST", "/transactions", {
-    items: [item],
-    currency_code: "USD",
-    collection_mode: "automatic",
-    checkout: { email: options.userEmail },
-    custom_data: { user_id: options.userId, tier: options.tier, cadence: options.cadence },
-  });
-  if (error || !data) return { ok: false, error: error ?? "Paddle did not return a transaction." };
-
-  const url = data.checkout_url ?? `${paddleCheckoutBase()}${data.id}`;
-  return { ok: true, url };
-}
-
-function catalogPriceFor(tier: PaddleTier, cadence: PaddleCadence): string | undefined {
-  return catalogPriceId(tier, cadence);
-}
-
 export type PortalResult = { ok: true; url: string } | { ok: false; error: string };
+
+// NOTE: checkout is opened client-side via Paddle.js (use-paddle-checkout.ts)
+// as a one-page overlay for the exact catalog price shown. There is no
+// server-minted transaction: a redirect to a transaction checkout URL racing
+// the pricing page's overlay caused Paddle's "Something went wrong" error.
 
 // --- Localized pricing preview (for the pricing page) ---
 // Paddle returns tax-inclusive totals per country: localized currency when

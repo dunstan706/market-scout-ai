@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { startCheckout } from "@/lib/account.functions";
+import { usePaddleCheckout } from "@/lib/use-paddle-checkout";
 
 // Pricing CTA for the landing page. Signed-in users get a real Paddle
 // checkout button (monthly cadence — the landing shows monthly prices);
@@ -20,19 +19,22 @@ export function LandingPlanCta({
   fallbackHref: string;
   fallbackLabel: string;
 }) {
-  const requestCheckout = useServerFn(startCheckout);
+  const { ready: paddleReady, error: paddleError, openCheckout } = usePaddleCheckout();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     import("@/integrations/supabase/client")
-      .then(({ supabase }) => {
-        supabase.auth.getSession().then(({ data }) => {
-          if (active) setSignedIn(Boolean(data.session));
-        });
-      })
+      .then(({ supabase }) =>
+        supabase.auth.getUser().then(({ data }) => {
+          if (!active) return;
+          setSignedIn(Boolean(data.user));
+          setUserEmail(data.user?.email ?? undefined);
+        }),
+      )
       .catch(() => {
         // Supabase env vars missing — nothing to authenticate against.
         if (active) setSignedIn(false);
@@ -46,20 +48,17 @@ export function LandingPlanCta({
     async (checkoutTier: "watch" | "advise") => {
       setBusy(true);
       setError("");
-      try {
-        const result = await requestCheckout({ data: { tier: checkoutTier, cadence: "monthly" } });
-        if (result.ok) {
-          window.location.href = result.url;
-        } else {
-          setError(result.error);
-          setBusy(false);
-        }
-      } catch {
-        setError("Could not start checkout. Please try again.");
+      if (!paddleReady) {
+        setError(paddleError || "Checkout is loading — one moment.");
         setBusy(false);
+        return;
       }
+      // Opens the Paddle.js one-page overlay directly — same proven path as
+      // the pricing page. No server-minted transaction, no redirect.
+      await openCheckout({ tier: checkoutTier, cadence: "monthly", email: userEmail });
+      setBusy(false);
     },
-    [requestCheckout],
+    [paddleReady, paddleError, openCheckout, userEmail],
   );
 
   const shell = `inline-block w-full rounded-sm px-4 py-2.5 transition-colors ${

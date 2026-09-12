@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { PricingSection, type PricingPlan } from "@/components/ui/pricing";
-import { startCheckout } from "@/lib/account.functions";
+import { usePaddleCheckout } from "@/lib/use-paddle-checkout";
 
 // Plans for the upgrade overlay — mirrors the landing page's pricing, with
 // yearly prices for the toggle and the same three tiers.
@@ -77,8 +76,26 @@ export function UpgradeOverlay({
   /** Shown above the plans — hosts adapt it to why the overlay opened. */
   title?: string | undefined;
 }) {
-  const requestCheckout = useServerFn(startCheckout);
+  const { ready: paddleReady, error: paddleError, openCheckout } = usePaddleCheckout();
+  const [session, setSession] = useState<{ email?: string | undefined; userId?: string | undefined }>({});
   const [checkoutError, setCheckoutError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    // Dashboard users are signed in — grab email + id so the checkout rides
+    // with them and the webhook can attach the plan to their profile.
+    let active = true;
+    import("@/integrations/supabase/client")
+      .then(({ supabase }) => supabase.auth.getUser())
+      .then(({ data }) => {
+        if (!active) return;
+        setSession({ email: data.user?.email ?? undefined, userId: data.user?.id ?? undefined });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,20 +110,24 @@ export function UpgradeOverlay({
     async (plan: PricingPlan, isMonthly: boolean) => {
       if (!plan.tier) return;
       setCheckoutError("");
-      try {
-        const result = await requestCheckout({
-          data: { tier: plan.tier, cadence: isMonthly ? "monthly" : "yearly" },
-        });
-        if (result.ok) {
-          window.location.href = result.url;
-        } else {
-          setCheckoutError(result.error);
-        }
-      } catch {
-        setCheckoutError("Could not start checkout. Please try again.");
+      if (!paddleReady) {
+        setCheckoutError(paddleError || "Checkout is loading — one moment.");
+        return;
       }
+      if (!session.email) {
+        setCheckoutError("Your account has no email — billing needs one.");
+        return;
+      }
+      // Opens the Paddle.js one-page overlay directly — same proven path as
+      // the pricing page. No server-minted transaction, no redirect.
+      await openCheckout({
+        tier: plan.tier,
+        cadence: isMonthly ? "monthly" : "yearly",
+        email: session.email,
+        userId: session.userId,
+      });
     },
-    [requestCheckout],
+    [paddleReady, paddleError, openCheckout, session.email, session.userId],
   );
 
   if (!open) return null;

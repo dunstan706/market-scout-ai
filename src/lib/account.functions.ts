@@ -675,36 +675,6 @@ export const getBillingStatus = createServerFn({ method: "POST" })
     };
   });
 
-const CheckoutInput = z.object({
-  tier: z.enum(["watch", "advise"]),
-  cadence: z.enum(["monthly", "yearly"]),
-});
-
-// Starts a Paddle hosted checkout for the chosen tier/cadence. The checkout
-// carries the signed-in user's id + email; the /api/webhooks/paddle endpoint
-// applies the plan to their profile after payment.
-export const startCheckout = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => CheckoutInput.parse(input))
-  .handler(
-    async ({ data, context }): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
-      const { data: authData } = await context.supabase.auth.getUser();
-      const email = authData?.user?.email;
-      if (!email) return { ok: false, error: "Your account has no email — billing needs one." };
-
-      const { createPaddleCheckout, isPaddleConfigured } = await import("@/lib/paddle.server");
-      if (!isPaddleConfigured()) {
-        return { ok: false, error: "Billing is not set up yet. Add PADDLE_API_KEY to the environment." };
-      }
-      return createPaddleCheckout({
-        userId: context.userId,
-        userEmail: email,
-        tier: data.tier,
-        cadence: data.cadence,
-      });
-    },
-  );
-
 // Generates a short-lived link to Paddle's hosted customer portal where the
 // customer can manage payment methods, download invoices, and cancel. The
 // customer id always resolves server-side from the profile — never from the
