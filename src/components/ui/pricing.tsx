@@ -200,7 +200,7 @@ export function PricingSection({
             className={cn(
               "grid items-start",
               compact
-                ? "mt-5 grid-cols-3 gap-3"
+                ? "mt-5 grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-3"
                 : "mt-12 grid-cols-1 gap-8 lg:grid-cols-3",
             )}
           >

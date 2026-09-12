@@ -139,7 +139,7 @@ export function UpgradeOverlay({
         onClick={onClose}
         data-skip-globe
       />
-      <div className="animate-rise relative w-full max-w-5xl" data-skip-globe>
+      <div className="animate-rise relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-y-auto rounded-md" data-skip-globe>
         {checkoutError ? (
           <p className="relative z-10 mx-auto mb-3 max-w-2xl rounded-sm border border-destructive/40 bg-destructive/10 px-4 py-2 text-center text-xs text-red-300">
             {checkoutError}
