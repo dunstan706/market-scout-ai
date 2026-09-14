@@ -14,9 +14,49 @@ export type Database = {
   }
   public: {
     Tables: {
+      businesses: {
+        Row: {
+          business_name: string
+          business_type: string
+          created_at: string
+          google_place_id: string | null
+          id: string
+          is_primary: boolean
+          location: string
+          price_point: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_name: string
+          business_type?: string
+          created_at?: string
+          google_place_id?: string | null
+          id?: string
+          is_primary?: boolean
+          location: string
+          price_point?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_name?: string
+          business_type?: string
+          created_at?: string
+          google_place_id?: string | null
+          id?: string
+          is_primary?: boolean
+          location?: string
+          price_point?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       briefs: {
         Row: {
           brief: Json
+          business_id: string | null
           business_name: string
           business_type: string
           created_at: string
@@ -27,6 +67,7 @@ export type Database = {
         }
         Insert: {
           brief: Json
+          business_id?: string | null
           business_name: string
           business_type?: string
           created_at?: string
@@ -37,6 +78,7 @@ export type Database = {
         }
         Update: {
           brief?: Json
+          business_id?: string | null
           business_name?: string
           business_type?: string
           created_at?: string
@@ -49,6 +91,7 @@ export type Database = {
       }
       monitoring_snapshots: {
         Row: {
+          business_id: string | null
           business_name: string
           business_type: string
           created_at: string
@@ -59,6 +102,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          business_id?: string | null
           business_name: string
           business_type?: string
           created_at?: string
@@ -69,6 +113,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          business_id?: string | null
           business_name?: string
           business_type?: string
           created_at?: string

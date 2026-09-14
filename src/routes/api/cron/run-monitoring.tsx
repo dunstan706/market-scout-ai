@@ -77,124 +77,171 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
     let emailed = 0;
     let skippedUnpaid = 0;
 
+    // Paid tiers only (column tolerated as absent — select("*")). Each paid
+    // profile then fans out to ALL of its businesses — the weekly digest is
+    // per business, so an Advise account with three businesses gets three
+    // briefs. Falls back to the profile's own business fields when the
+    // businesses table is not yet migrated (pre-deploy DBs keep working).
     for (const profile of profiles ?? []) {
-      const businessName = profile.business_name ?? "";
-      const location = profile.location ?? "";
-      if (!businessName.trim() || !location.trim()) continue;
-
-      // Paid tiers only (column tolerated as absent — select("*")).
       const tier = (profile as { plan_tier?: string | null }).plan_tier ?? "free";
-      if (!force && tier !== "watch" && tier !== "advise") {
+      if (!force && tier !== "watch" && tier !== "advise" && tier !== "expand") {
         skippedUnpaid += 1;
         continue;
       }
-      try {
-        const input = {
-          businessName,
+
+      const { data: businessRows } = await supabaseAdmin
+        .from("businesses")
+        .select("*")
+        .eq("user_id", profile.id);
+      const targets: Array<{
+        id: string | null;
+        businessName: string;
+        businessType: "salon" | "spa" | "other";
+        location: string;
+        googlePlaceId?: string | undefined;
+        pricePoint?: string | undefined;
+      }> = (businessRows ?? [])
+        .filter((b) => (b.business_name ?? "").trim() && (b.location ?? "").trim())
+        .map((b) => ({
+          id: b.id,
+          businessName: b.business_name,
           businessType:
-            profile.business_type === "spa" || profile.business_type === "other"
-              ? profile.business_type
+            b.business_type === "spa" || b.business_type === "other"
+              ? (b.business_type as "spa" | "other")
               : "salon",
-          location,
-          // Pin from a previous successful match, when present: the own-listing
-          // lookup targets the place ID directly instead of re-matching names.
-          googlePlaceId:
-            (profile as { google_place_id?: string | null }).google_place_id ?? undefined,
-        };
-
-        // Full mode: the weekly mail is where the Watch tier's richer,
-        // multi-source picture (Google + OSM + Foursquare + Geoapify +
-        // Overture) is meant to land. User-initiated scans stay on the
-        // conservative "preview" mode by default.
-        const research = await collectLocalResearch(input, { mode: "full" });
-
-        const { data: historyRows } = await supabaseAdmin
-          .from("monitoring_snapshots")
-          .select("snapshot")
-          .eq("user_id", profile.id)
-          .order("created_at", { ascending: false })
-          .limit(8);
-        const parsedHistory = (historyRows ?? [])
-          .reverse()
-          .map((row) => parseResearchSnapshot(row.snapshot))
-          .filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
-        const previous = parsedHistory[parsedHistory.length - 1] ?? null;
-        const changes = detectChanges(previous, research);
-
-        const generated = await writeBrief({
-          input,
-          research,
-          changes,
-          analysis: buildMarketAnalysis(research, parsedHistory, profile.price_point ?? null),
-        });
-
-        await supabaseAdmin.from("monitoring_snapshots").insert({
-          user_id: profile.id,
-          business_name: input.businessName,
-          business_type: input.businessType,
-          location: input.location,
-          snapshot: research as unknown as Json,
-          detected_changes: changes as unknown as Json,
-        });
-
-        // Pin the matched listing on the profile so future weekly runs key on
-        // the place ID instead of re-matching the typed name.
-        const matchedPlaceId = research.ownListingPlaceId ?? undefined;
-        if (matchedPlaceId && matchedPlaceId !== input.googlePlaceId) {
-          const { error: pinError } = await supabaseAdmin
-            .from("profiles")
-            .update({ google_place_id: matchedPlaceId })
-            .eq("id", profile.id);
-          if (pinError) console.error(`place id persist failed for profile ${profile.id}`, pinError.message);
+          location: b.location,
+          googlePlaceId: (b as { google_place_id?: string | null }).google_place_id ?? undefined,
+          pricePoint: (b as { price_point?: string | null }).price_point ?? undefined,
+        }));
+      if (targets.length === 0) {
+        const businessName = profile.business_name ?? "";
+        const location = profile.location ?? "";
+        if (businessName.trim() && location.trim()) {
+          targets.push({
+            id: null,
+            businessName,
+            businessType:
+              profile.business_type === "spa" || profile.business_type === "other"
+                ? (profile.business_type as "spa" | "other")
+                : "salon",
+            location,
+            googlePlaceId:
+              (profile as { google_place_id?: string | null }).google_place_id ?? undefined,
+            pricePoint:
+              (profile as { price_point?: string | null }).price_point ?? undefined,
+          });
         }
+      }
 
-        const { data: inserted, error: insertError } = await supabaseAdmin
-          .from("briefs")
-          .insert({
+      for (const business of targets) {
+        try {
+          const input = {
+            businessName: business.businessName,
+            businessType: business.businessType,
+            location: business.location,
+            // Pin from a previous successful match, when present: the own-listing
+            // lookup targets the place ID directly instead of re-matching names.
+            googlePlaceId: business.googlePlaceId,
+          };
+
+          // Full mode: the weekly mail is where the Watch tier's richer,
+          // multi-source picture (Google + OSM + Foursquare + Geoapify +
+          // Overture) is meant to land. User-initiated scans stay on the
+          // conservative "preview" mode by default.
+          const research = await collectLocalResearch(input, { mode: "full" });
+
+          // History for THIS business when it has an id (post-migration);
+          // account-wide history as the pre-migration fallback.
+          const { data: historyRows } = await supabaseAdmin
+            .from("monitoring_snapshots")
+            .select("snapshot")
+            .eq(business.id ? "business_id" : "user_id", business.id ?? profile.id)
+            .order("created_at", { ascending: false })
+            .limit(8);
+          const parsedHistory = (historyRows ?? [])
+            .reverse()
+            .map((row) => parseResearchSnapshot(row.snapshot))
+            .filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
+          const previous = parsedHistory[parsedHistory.length - 1] ?? null;
+          const changes = detectChanges(previous, research);
+
+          const generated = await writeBrief({
+            input,
+            research,
+            changes,
+            analysis: buildMarketAnalysis(research, parsedHistory, business.pricePoint ?? null),
+          });
+
+          await supabaseAdmin.from("monitoring_snapshots").insert({
             user_id: profile.id,
+            business_id: business.id,
             business_name: input.businessName,
             business_type: input.businessType,
             location: input.location,
-            brief: {
-              ...generated,
-              sources: research.sources,
-              warnings: research.warnings,
-              capturedAt: research.capturedAt,
-            } as unknown as Json,
-          })
-          .select("id")
-          .single();
-        if (insertError) throw insertError;
-
-        // Fresh brief — deliver it by email when a sender is configured.
-        const recipient = await recipientEmail(supabaseAdmin, profile.id);
-        if (recipient) {
-          const { subject, html, text } = renderBriefEmail({
-            title: generated.title,
-            signals: generated.signals,
-            recommendation: generated.recommendation,
-            why: generated.why,
-            sources: research.sources.map((source) => ({ label: source.label, url: source.url })),
-            dashboardUrl: `${requestUrlBase(request)}/dashboard`,
+            snapshot: research as unknown as Json,
+            detected_changes: changes as unknown as Json,
           });
-          const sent = await sendEmail({ to: recipient, subject, html, text });
-          if (sent.ok) {
-            await supabaseAdmin.from("briefs").update({ emailed_at: new Date().toISOString() }).eq("id", inserted.id);
-            emailed += 1;
-          } else {
-            // Logged, not fatal: the brief stays stored and un-emailed, so the
-            // next run retries delivery.
-            console.error(`email failed for profile ${profile.id}`, sent.error);
-          }
-        }
 
-        processed += 1;
-      } catch (error) {
-        console.error(`monitoring failed for profile ${profile.id}`, error);
-        failed.push({
-          profileId: profile.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+          // Pin the matched listing on the business row so future weekly runs
+          // key on the place ID instead of re-matching the typed name.
+          const matchedPlaceId = research.ownListingPlaceId ?? undefined;
+          if (matchedPlaceId && matchedPlaceId !== input.googlePlaceId && business.id) {
+            const { error: pinError } = await supabaseAdmin
+              .from("businesses")
+              .update({ google_place_id: matchedPlaceId })
+              .eq("id", business.id);
+            if (pinError) console.error(`place id persist failed for ${business.id}`, pinError.message);
+          }
+
+          const { data: inserted, error: insertError } = await supabaseAdmin
+            .from("briefs")
+            .insert({
+              user_id: profile.id,
+              business_id: business.id,
+              business_name: input.businessName,
+              business_type: input.businessType,
+              location: input.location,
+              brief: {
+                ...generated,
+                sources: research.sources,
+                warnings: research.warnings,
+                capturedAt: research.capturedAt,
+              } as unknown as Json,
+            })
+            .select("id")
+            .single();
+          if (insertError) throw insertError;
+
+          // Fresh brief — deliver it by email when a sender is configured.
+          const recipient = await recipientEmail(supabaseAdmin, profile.id);
+          if (recipient) {
+            const { subject, html, text } = renderBriefEmail({
+              title: generated.title,
+              signals: generated.signals,
+              recommendation: generated.recommendation,
+              why: generated.why,
+              sources: research.sources.map((source) => ({ label: source.label, url: source.url })),
+              dashboardUrl: `${requestUrlBase(request)}/dashboard`,
+            });
+            const sent = await sendEmail({ to: recipient, subject, html, text });
+            if (sent.ok) {
+              await supabaseAdmin.from("briefs").update({ emailed_at: new Date().toISOString() }).eq("id", inserted.id);
+              emailed += 1;
+            } else {
+              // Logged, not fatal: the brief stays stored and un-emailed, so the
+              // next run retries delivery.
+              console.error(`email failed for profile ${profile.id}`, sent.error);
+            }
+          }
+
+          processed += 1;
+        } catch (error) {
+          console.error(`monitoring failed for profile ${profile.id}`, error);
+          failed.push({
+            profileId: profile.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
 

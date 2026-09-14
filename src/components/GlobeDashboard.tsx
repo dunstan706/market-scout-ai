@@ -17,7 +17,9 @@ import {
   getMonitoringStatus,
   listBriefs,
   listBusinesses,
-  saveProfile,
+  saveBusiness,
+  PLAN_BUSINESS_LIMITS,
+  type BillingStatus,
   type BriefRecord,
   type Business,
   type BusinessType,
@@ -64,7 +66,7 @@ export function GlobeDashboard() {
   const fetchBusinesses = useServerFn(listBusinesses);
   const claimProfile = useServerFn(claimWaitlistProfile);
   const fetchBilling = useServerFn(getBillingStatus);
-  const persistProfile = useServerFn(saveProfile);
+  const persistBusiness = useServerFn(saveBusiness);
   const fetchStatus = useServerFn(getMonitoringStatus);
   const fetchBriefs = useServerFn(listBriefs);
   const runMonitoring = useServerFn(generateMonitoringBrief);
@@ -105,6 +107,9 @@ export function GlobeDashboard() {
   const [pricingOpen, setPricingOpen] = useState(false);
   // Why the overlay is up — the title adapts (choosing a plan vs. limit hit).
   const [pricingReason, setPricingReason] = useState<"choose" | "limit">("limit");
+  // Billing state drives the + pill's tier gate (how many businesses this
+  // account may add before the plans overlay takes over).
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
 
   // The "run a scan" callout box: wanted after a business is added or when the
   // amber mark is clicked. While it is open the globe holds still; dismissing
@@ -160,14 +165,10 @@ export function GlobeDashboard() {
         if (resolved.length === 0) {
           const claimed = await claimProfile();
           if (claimed.profile) {
-            resolved = [
-              {
-                id: data.session.user.id,
-                businessName: claimed.profile.businessName,
-                businessType: claimed.profile.businessType,
-                location: claimed.profile.location,
-              },
-            ];
+            // The claim seeds a real businesses row — read it back so the id
+            // is the business id (scans and history key on it, not the user id).
+            const reread = await fetchBusinesses();
+            resolved = reread.businesses;
           }
         }
         if (cancelled) return;
@@ -181,8 +182,10 @@ export function GlobeDashboard() {
         // plans straight away, same overlay as the add-business limit. The
         // user can dismiss it and still use everything their tier allows.
         try {
-          const { status: billing } = await fetchBilling();
-          if (!cancelled && !billing.accessGranted) {
+          const { status: billingStatus } = await fetchBilling();
+          if (cancelled) return;
+          setBilling(billingStatus);
+          if (!billingStatus.accessGranted) {
             setPricingReason("choose");
             setPricingOpen(true);
           }
@@ -286,15 +289,16 @@ export function GlobeDashboard() {
     lon: Math.PI / 2 - 2.1 + (i * Math.PI * 2) / Math.max(1, businesses.length),
   }));
 
-  // Load monitoring status + stored briefs whenever the panel expands.
+  // Load monitoring status + stored briefs for the ACTIVE business whenever
+  // the panel expands (or the selection changes under an open panel).
   useEffect(() => {
-    if (!expanded) return;
+    if (!expanded || !activeId) return;
     let cancelled = false;
     void (async () => {
       try {
         const [{ status: monitoring }, { briefs: stored }] = await Promise.all([
-          fetchStatus(),
-          fetchBriefs(),
+          fetchStatus({ data: { businessId: activeId } }),
+          fetchBriefs({ data: { businessId: activeId } }),
         ]);
         if (cancelled) return;
         setStatus(monitoring);
@@ -306,7 +310,7 @@ export function GlobeDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [expanded, fetchStatus, fetchBriefs]);
+  }, [expanded, activeId, fetchStatus, fetchBriefs]);
 
   // Seed the details form whenever the active business changes.
   useEffect(() => {
@@ -388,9 +392,10 @@ export function GlobeDashboard() {
   }
 
   function openAdd() {
-    // Every tier below Advise caps at one business: the + pill becomes the
-    // plans overlay once one exists.
-    if (businesses.length >= 1) {
+    // Tier cap, server-enforced too: free = 0 new, Watch = 1, Advise = 5,
+    // Expand = unlimited. At the cap the + pill becomes the plans overlay.
+    const tier = billing?.planTier ?? "free";
+    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier]) {
       setPricingReason("limit");
       openPricing();
       return;
@@ -420,7 +425,7 @@ export function GlobeDashboard() {
     setAddError("");
     try {
       const { business: created } = await addBusiness({ data: draft });
-      setBusinesses([created]); // now in sync with the old dashboard's profiles
+      setBusinesses((prev) => [...prev, created]); // multi-business: append
       setActiveId(created.id);
       // First business created — close the panel and let the globe play its
       // reveal: one fast full turn, the type fades to a plain dotted field,
@@ -460,12 +465,11 @@ export function GlobeDashboard() {
     setSavedFlash(false);
     setSavedError("");
     try {
-      await persistProfile({ data: detailDraft });
-      if (activeBusiness) {
-        setBusinesses((prev) =>
-          prev.map((b) => (b.id === activeBusiness.id ? { ...b, ...detailDraft } : b)),
-        );
-      }
+      if (!activeBusiness) return;
+      await persistBusiness({ data: { ...detailDraft, businessId: activeBusiness.id } });
+      setBusinesses((prev) =>
+        prev.map((b) => (b.id === activeBusiness.id ? { ...b, ...detailDraft } : b)),
+      );
       setSavedFlash(true);
     } catch (err) {
       const message =
@@ -487,7 +491,7 @@ export function GlobeDashboard() {
     setGenError("");
     setLatestChanges([]);
     try {
-      const res = await runMonitoring();
+      const res = await runMonitoring({ data: { businessId: activeBusiness.id } });
       if (!res.ok) {
         setGenError(res.error);
         setGenState("error");
@@ -497,8 +501,8 @@ export function GlobeDashboard() {
       setLatestChanges(res.changes);
       setGenState("done");
       const [{ status: monitoring }, { briefs: stored }] = await Promise.all([
-        fetchStatus(),
-        fetchBriefs(),
+        fetchStatus({ data: { businessId: activeBusiness.id } }),
+        fetchBriefs({ data: { businessId: activeBusiness.id } }),
       ]);
       setStatus(monitoring);
       setBriefs(stored);

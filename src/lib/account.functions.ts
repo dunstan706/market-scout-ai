@@ -1,11 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { Json, Tables } from "@/integrations/supabase/types";
+import type { Database, Json, Tables } from "@/integrations/supabase/types";
 import { BriefSchema } from "@/lib/brief-core";
 import { collectLocalResearch, type ResearchSnapshot } from "@/lib/local-research.server";
 import { describeBriefError, writeBrief } from "@/lib/brief-writer.server";
 import type { LocalizedPrice } from "@/lib/paddle.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   detectChanges,
   parseDetectedChanges,
@@ -51,6 +52,7 @@ export type StoredBrief = z.infer<typeof StoredBriefSchema>;
 
 export type BriefRecord = {
   id: string;
+  businessId?: string | undefined;
   businessName: string;
   businessType: BusinessType;
   location: string;
@@ -67,6 +69,10 @@ export type MonitoringStatus = {
 };
 
 type ProfileRow = Tables<"profiles">;
+
+// The auth middleware hands handlers a user-scoped client over the generated
+// Database types (RLS applies).
+type ContextSupabase = SupabaseClient<Database>;
 
 // In development, append the underlying Supabase error so setup problems
 // (missing tables from unapplied migrations, RLS mistakes) are visible in the
@@ -133,92 +139,194 @@ export const getMyProfile = createServerFn({ method: "POST" })
     return { profile: toProfile(data) };
   });
 
-// Business-facing view of an account's business (one per account while the
-// free tier caps at 1; the multi-business data model ships later).
+// Business-facing view of an account's businesses. A real businesses table
+// (multi-business persistence) holds one row per business; the account's
+// profile row stays as the billing/identity record only.
 export type Business = {
   id: string;
   businessName: string;
   businessType: BusinessType;
   location: string;
-  pricePoint?: string;
+  pricePoint?: string | undefined;
 };
 
-function toBusiness(row: ProfileRow): Business {
-  const businessType: BusinessType =
-    row.business_type === "spa" || row.business_type === "other" ? row.business_type : "salon";
+function toBusiness(row: {
+  id: string;
+  business_name: string | null;
+  business_type: string | null;
+  location: string | null;
+  price_point?: string | null;
+}): Business {
   return {
     id: row.id,
     businessName: row.business_name ?? "",
-    businessType,
+    businessType: toBusinessType(row.business_type ?? "salon"),
     location: row.location ?? "",
-    pricePoint: row.price_point ?? "",
+    pricePoint: row.price_point ?? undefined,
   };
+}
+
+// Paid plan tiers on the profile row. "expand" is the quote-only tier — it
+// only appears once set manually, so it is tolerated but never sold online.
+export type PlanTier = "free" | "watch" | "advise" | "expand";
+
+// Businesses per tier. free = 0 new (existing businesses are grandfathered —
+// the seeding migration keeps them); the UI hides Add for free accounts and
+// createBusiness enforces the cap server-side regardless.
+export const PLAN_BUSINESS_LIMITS: Record<PlanTier, number> = {
+  free: 0,
+  watch: 1,
+  advise: 5,
+  expand: Number.POSITIVE_INFINITY,
+};
+
+const BusinessIdInput = z.string().uuid();
+
+async function countBusinesses(supabase: ContextSupabase, userId: string): Promise<number> {
+  const { count } = await supabase
+    .from("businesses")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  return count ?? 0;
+}
+
+async function planTierFor(supabase: ContextSupabase, userId: string): Promise<PlanTier> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("plan_tier")
+    .eq("id", userId)
+    .maybeSingle();
+  const tier = (data as { plan_tier?: string | null } | null)?.plan_tier;
+  return tier === "watch" || tier === "advise" || tier === "expand" ? tier : "free";
 }
 
 export const listBusinesses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ businesses: Business[] }> => {
     const { data, error } = await context.supabase
+      .from("businesses")
+      .select("*")
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("listBusinesses failed", error);
+      return { businesses: [] };
+    }
+    if (data && data.length > 0) return { businesses: data.map(toBusiness) };
+
+    // Self-heal: the migration seeds businesses from profiles, but a profile
+    // saved after the seed ran (or a failed best-effort claim insert) leaves
+    // an account without rows. Re-seed from the profile so the business —
+    // and its stored history — stays visible.
+    const { data: profileRow } = await context.supabase
       .from("profiles")
       .select("*")
       .eq("id", context.userId)
       .maybeSingle();
-    if (error) console.error("listBusinesses failed", error);
-    return { businesses: data ? [toBusiness(data)] : [] };
+    const profile = toProfile(profileRow);
+    if (!profile?.businessName || !profile.location) return { businesses: [] };
+
+    const { data: seeded, error: seedError } = await context.supabase
+      .from("businesses")
+      .insert({
+        user_id: context.userId,
+        business_name: profile.businessName,
+        business_type: profile.businessType,
+        location: profile.location,
+        price_point: normalizePricePoint(profile.pricePoint),
+        google_place_id: (profileRow as { google_place_id?: string | null } | null)?.google_place_id ?? null,
+        is_primary: true,
+      })
+      .select("*")
+      .single();
+    if (seedError || !seeded) {
+      console.error("listBusinesses reseed failed", seedError);
+      // Last resort: present the profile as a transient business so the UI
+      // still works (scans of it will fail to save history until reseeded).
+      return { businesses: [{ ...toBusiness(profileRow!), id: context.userId }] };
+      }
+    return { businesses: [toBusiness(seeded)] };
   });
 
-// Adds the account's first (and, on the free tier, only) business. The
-// soft-cap is enforced here server-side so the UI limit can't be bypassed.
+// Adds a business under the account's tier cap. The cap is checked server-side
+// (the UI limit can't be bypassed) and described in user terms.
 export const createBusiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ProfileInput.parse(input))
   .handler(async ({ data, context }): Promise<{ business: Business }> => {
-    const { data: existing } = await context.supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", context.userId)
-      .maybeSingle();
-    if (existing) {
-      throw new Error(
-        describeError(
-          "Your plan includes one business.",
-          "Free accounts monitor a single business — paid plans (coming soon) add more.",
-        ),
-      );
+    const tier = await planTierFor(context.supabase, context.userId);
+    const limit = PLAN_BUSINESS_LIMITS[tier];
+    const current = await countBusinesses(context.supabase, context.userId);
+    if (current >= limit) {
+      const where =
+        tier === "free"
+          ? "Subscribe to a plan to add your first business."
+          : tier === "watch"
+            ? "The Watch plan includes one business — upgrade to Advise for up to 5."
+            : "The Advise plan includes up to 5 businesses — the Expand tier adds unlimited.";
+      throw new Error(describeError("You've reached your plan's business limit.", where));
     }
-    const base: ProfileWriteRow = {
-      id: context.userId,
-      business_name: data.businessName,
-      business_type: data.businessType,
-      location: data.location,
-      updated_at: new Date().toISOString(),
-    };
-    const payload = (withPricePoint: boolean): ProfileWriteRow =>
-      withPricePoint ? { ...base, price_point: normalizePricePoint(data.pricePoint) } : base;
-    const upsertWith = async (withPricePoint: boolean) => {
-      const result = await context.supabase
-        .from("profiles")
-        .upsert(payload(withPricePoint), { onConflict: "id" });
-      return result.error;
-    };
-    let error = await upsertWith(pricePointSupported !== false);
-    if (error && isMissingPricePointError(error)) {
-      pricePointSupported = false;
-      error = await upsertWith(false);
-    }
-    if (error) {
-      console.error("createBusiness failed", error);
-      throw new Error(describeError("Could not add your business.", error.message));
-    }
-    const { data: created } = await context.supabase
-      .from("profiles")
+
+    const { data: created, error } = await context.supabase
+      .from("businesses")
+      .insert({
+        user_id: context.userId,
+        business_name: data.businessName,
+        business_type: data.businessType,
+        location: data.location,
+        price_point: normalizePricePoint(data.pricePoint),
+      })
       .select("*")
-      .eq("id", context.userId)
-      .maybeSingle();
-    if (!created) {
-      throw new Error(describeError("Could not add your business.", "Profile was not created."));
+      .single();
+    if (error || !created) {
+      console.error("createBusiness failed", error);
+      throw new Error(describeError("Could not add your business.", error?.message));
     }
     return { business: toBusiness(created) };
+  });
+
+// Saves edits (name, type, location, price point) to one of the account's
+// businesses. RLS scopes the update to the owner; the guard makes a 404 read
+// as a friendly message instead of a silent no-op.
+export const saveBusiness = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => ProfileInput.extend({ businessId: BusinessIdInput }).parse(input))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { businessId, ...fields } = data;
+    const { error } = await context.supabase
+      .from("businesses")
+      .update({
+        business_name: fields.businessName,
+        business_type: fields.businessType,
+        location: fields.location,
+        price_point: normalizePricePoint(fields.pricePoint),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", businessId)
+      .eq("user_id", context.userId);
+    if (error) {
+      console.error("saveBusiness failed", error);
+      throw new Error(describeError("Could not save your business.", error.message));
+    }
+    return { ok: true };
+  });
+
+// Removes a business and (via ON DELETE CASCADE) its snapshots and briefs.
+// Deleting your last business is allowed — free accounts simply have none.
+export const deleteBusiness = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => BusinessIdInput.parse(input))
+  .handler(async ({ data: businessId, context }): Promise<{ ok: true }> => {
+    const { error } = await context.supabase
+      .from("businesses")
+      .delete()
+      .eq("id", businessId)
+      .eq("user_id", context.userId);
+    if (error) {
+      console.error("deleteBusiness failed", error);
+      throw new Error(describeError("Could not remove your business.", error.message));
+    }
+    return { ok: true };
   });
 
 // Probes whether the tables the dashboard writes to exist (they're created by
@@ -252,6 +360,9 @@ export const getSchemaStatus = createServerFn({ method: "POST" })
     },
   );
 
+// Legacy shape — kept so the legacy dashboard keeps working unchanged. Saves
+// the account-level profile AND mirrors the edit onto the account's primary
+// business row, so the two dashboards never disagree about the business.
 export const saveProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ProfileInput.parse(input))
@@ -279,6 +390,39 @@ export const saveProfile = createServerFn({ method: "POST" })
     if (error) {
       console.error("saveProfile failed", error);
       throw new Error(describeError("Could not save your profile.", error.message));
+    }
+
+    // Mirror onto the primary business (oldest row) when one exists; create
+    // one when the profile has a business but the table doesn't yet (pre-
+    // migration accounts hitting the legacy dashboard first).
+    const { data: primary } = await context.supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (primary) {
+      await context.supabase
+        .from("businesses")
+        .update({
+          business_name: data.businessName,
+          business_type: data.businessType,
+          location: data.location,
+          price_point: normalizePricePoint(data.pricePoint),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", primary.id)
+        .eq("user_id", context.userId);
+    } else {
+      await context.supabase.from("businesses").insert({
+        user_id: context.userId,
+        business_name: data.businessName,
+        business_type: data.businessType,
+        location: data.location,
+        price_point: normalizePricePoint(data.pricePoint),
+        is_primary: true,
+      });
     }
     return { ok: true };
   });
@@ -339,7 +483,24 @@ export const claimWaitlistProfile = createServerFn({ method: "POST" })
         .select("*")
         .eq("id", userId)
         .maybeSingle();
-      return { profile: toProfile(created), claimed: true };
+      const profile = toProfile(created);
+
+      // Mirror the claimed business into the businesses table so the
+      // multi-business model sees it (and the profile stays the billing
+      // identity). Best-effort: an insert failure here is healed by the
+      // listBusinesses fallback below.
+      if (profile?.businessName && profile.location) {
+        await supabaseAdmin.from("businesses").insert({
+          user_id: userId,
+          business_name: profile.businessName,
+          business_type: profile.businessType,
+          location: profile.location,
+          price_point: normalizePricePoint(profile.pricePoint),
+          is_primary: true,
+        });
+      }
+
+      return { profile, claimed: true };
     },
   );
 
@@ -348,8 +509,10 @@ export const claimWaitlistProfile = createServerFn({ method: "POST" })
 // 3. store the new snapshot with detected changes, 4. write + store the brief.
 export const generateMonitoringBrief = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ businessId: BusinessIdInput }).parse(input))
   .handler(
     async ({
+      data,
       context,
     }): Promise<
       | {
@@ -376,22 +539,28 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         };
       }
 
-      const { data: profileRow } = await context.supabase
-        .from("profiles")
+      // The scan target is one of the account's businesses (RLS-scoped —
+      // another user's businessId reads as "not found").
+      const { data: businessRow } = await context.supabase
+        .from("businesses")
         .select("*")
-        .eq("id", userId)
+        .eq("id", data.businessId)
+        .eq("user_id", userId)
         .maybeSingle();
-      const profile = toProfile(profileRow);
-      if (!profile?.businessName || !profile.location) {
+      if (!businessRow) {
+        return { ok: false, error: "Save your business name and neighbourhood first." };
+      }
+      const business = toBusiness(businessRow);
+      if (!business.businessName || !business.location) {
         return { ok: false, error: "Save your business name and neighbourhood first." };
       }
       const input = {
-        businessName: profile.businessName,
-        businessType: profile.businessType,
-        location: profile.location,
+        businessName: business.businessName,
+        businessType: business.businessType,
+        location: business.location,
         // Pin from a previous successful match, when present: the own-listing
         // lookup targets the place ID directly instead of re-matching names.
-        googlePlaceId: profileRow?.google_place_id ?? undefined,
+        googlePlaceId: businessRow.google_place_id ?? undefined,
       };
 
       let research: ResearchSnapshot;
@@ -409,11 +578,12 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
       }
 
       // Recent stored history drives both change detection (previous run) and
-      // the trend analysis (the whole window). Newest first, then reversed.
+      // the trend analysis (the whole window). Newest first, then reversed —
+      // scoped to THIS business so its diff never mixes with a sibling's.
       const { data: historyRows } = await context.supabase
         .from("monitoring_snapshots")
         .select("snapshot")
-        .eq("user_id", userId)
+        .eq("business_id", data.businessId)
         .order("created_at", { ascending: false })
         .limit(8);
       const historyAsc: StoredResearchSnapshot[] = [];
@@ -427,7 +597,7 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
       // Same treatment as the weekly cron: the market analysis (rating rank,
       // price position, benchmarks) is computed from stored history and fed
       // into the brief writer so dashboard briefs are as deep as the mail.
-      const analysis = buildMarketAnalysis(research, historyAsc, profile.pricePoint ?? null);
+      const analysis = buildMarketAnalysis(research, historyAsc, business.pricePoint ?? null);
 
       // Persist the snapshot BEFORE the LLM call: a failed/aborted brief
       // generation must not discard the scan — the research was already paid
@@ -436,6 +606,7 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         .from("monitoring_snapshots")
         .insert({
           user_id: userId,
+          business_id: data.businessId,
           business_name: input.businessName,
           business_type: input.businessType,
           location: input.location,
@@ -444,19 +615,20 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
         });
       if (snapshotError) console.error("monitoring snapshot insert failed", snapshotError);
 
-      // Pin the matched listing on the profile: from here on, own-listing
+      // Pin the matched listing on the business row: from here on, own-listing
       // lookups key on the place ID and stop depending on the typed name
       // (immune to typos, rebrands, and word-order differences).
       const matchedPlaceId = research.ownListingPlaceId ?? undefined;
       if (matchedPlaceId && matchedPlaceId !== input.googlePlaceId) {
         const { error: pinError } = await context.supabase
-          .from("profiles")
+          .from("businesses")
           .update({ google_place_id: matchedPlaceId })
-          .eq("id", userId);
+          .eq("id", data.businessId)
+          .eq("user_id", userId);
         if (pinError) {
           console.error("google place id persist failed", pinError.message);
-        } else if (profileRow) {
-          profileRow.google_place_id = matchedPlaceId;
+        } else {
+          businessRow.google_place_id = matchedPlaceId;
         }
       }
 
@@ -476,6 +648,7 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
       };
       const { error: briefError } = await context.supabase.from("briefs").insert({
         user_id: userId,
+        business_id: data.businessId,
         business_name: input.businessName,
         business_type: input.businessType,
         location: input.location,
@@ -499,18 +672,20 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
 
 export const getMonitoringStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ status: MonitoringStatus }> => {
-    const userId = context.userId;
-    const { data: profileRow } = await context.supabase
-      .from("profiles")
+  .validator((input: unknown) => z.object({ businessId: BusinessIdInput }).parse(input))
+  .handler(async ({ data, context }): Promise<{ status: MonitoringStatus }> => {
+    const { data: businessRow } = await context.supabase
+      .from("businesses")
       .select("*")
-      .eq("id", userId)
+      .eq("id", data.businessId)
+      .eq("user_id", context.userId)
       .maybeSingle();
-    const profile = toProfile(profileRow);
+    const business = businessRow ? toBusiness(businessRow) : null;
     const { data: rows } = await context.supabase
       .from("monitoring_snapshots")
       .select("snapshot, detected_changes, created_at")
-      .eq("user_id", userId)
+      .eq("business_id", data.businessId)
+      .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(8);
     const ordered = [...(rows ?? [])].reverse(); // oldest first
@@ -522,7 +697,8 @@ export const getMonitoringStatus = createServerFn({ method: "POST" })
     const { count } = await context.supabase
       .from("monitoring_snapshots")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", userId);
+      .eq("business_id", data.businessId)
+      .eq("user_id", context.userId);
     const latestRow = ordered[ordered.length - 1] ?? null;
     const latest = snapshotsAsc[snapshotsAsc.length - 1] ?? null;
     return {
@@ -532,7 +708,7 @@ export const getMonitoringStatus = createServerFn({ method: "POST" })
         snapshotCount: count ?? 0,
         changes: latestRow ? parseDetectedChanges(latestRow.detected_changes) : [],
         analysis: latest
-          ? buildMarketAnalysis(latest, snapshotsAsc.slice(0, -1), profile?.pricePoint ?? null)
+          ? buildMarketAnalysis(latest, snapshotsAsc.slice(0, -1), business?.pricePoint ?? null)
           : null,
       },
     };
@@ -600,11 +776,21 @@ export const sendTestBriefEmail = createServerFn({ method: "POST" })
 
 export const listBriefs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ briefs: BriefRecord[] }> => {
-    const { data, error } = await context.supabase
+  .validator((input: unknown) =>
+    z
+      .object({ businessId: BusinessIdInput.optional() })
+      .default({})
+      .parse(input ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<{ briefs: BriefRecord[] }> => {
+    let query = context.supabase
       .from("briefs")
-      .select("id, business_name, business_type, location, brief, created_at")
-      .eq("user_id", context.userId)
+      .select("id, business_id, business_name, business_type, location, brief, created_at")
+      .eq("user_id", context.userId);
+    // One business's history when a business is active; the whole account's
+    // feed otherwise (the legacy dashboard's default view).
+    if (data.businessId) query = query.eq("business_id", data.businessId);
+    const { data: rows, error } = await query
       .order("created_at", { ascending: false })
       .limit(10);
     if (error) {
@@ -612,11 +798,12 @@ export const listBriefs = createServerFn({ method: "POST" })
       return { briefs: [] };
     }
     const briefs: BriefRecord[] = [];
-    for (const row of data ?? []) {
+    for (const row of rows ?? []) {
       const parsed = StoredBriefSchema.safeParse(row.brief);
       if (!parsed.success) continue;
       briefs.push({
         id: row.id,
+        businessId: row.business_id ?? undefined,
         businessName: row.business_name,
         businessType: toBusinessType(row.business_type),
         location: row.location,
