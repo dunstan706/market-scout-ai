@@ -1,0 +1,43 @@
+# Weekly market-brief scheduler.
+#
+# Every Monday 08:00 UTC this POSTs to the production monitoring cron, which
+# runs one full research cycle per paid profile (Google/OSM/secondary sources,
+# change detection, market analysis, LLM brief) and emails the brief.
+# The cron stamps emailed_at after sending, so scheduler retries never
+# double-send. Free-tier profiles are skipped unless ?force=1.
+#
+# Required repo secret: LOVABLE_CRON_SECRET (same value as the Lovable secret).
+# Notes:
+# - Scheduled workflows only run on the default branch (main) — keep this file there.
+# - GitHub disables schedules after ~60 days with no commits to the repo;
+#   any push resets the clock (worth knowing for a quiet product).
+
+name: Weekly market briefs
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Mondays 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL to hit (defaults to production)"
+        required: false
+        default: "https://thebizscope.com"
+      force:
+        description: "Include free-tier profiles (testing only)"
+        required: false
+        default: "false"
+
+jobs:
+  run-monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger monitoring cron
+        run: |
+          BASE="${{ inputs.url || 'https://thebizscope.com' }}"
+          FORCE=""
+          if [ "${{ inputs.force }}" = "true" ]; then FORCE="?force=1"; fi
+          curl -sS --fail-with-body -X POST "${BASE}/api/cron/run-monitoring${FORCE}" \
+            -H "Authorization: Bearer ${{ secrets.LOVABLE_CRON_SECRET }}" \
+            --max-time 600 \
+            -H "content-type: application/json"

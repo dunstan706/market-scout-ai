@@ -16,6 +16,7 @@ type RunResult = {
   ok: boolean;
   processed?: number;
   emailed?: number;
+  skippedUnpaid?: number;
   failed?: Array<{ profileId: string; error: string }>;
   error?: string;
 };
@@ -27,15 +28,21 @@ function jsonResponse(payload: RunResult, status = 200): Response {
   });
 }
 
-// Runs one full monitoring cycle per saved profile: fresh research scan →
+// Runs one full monitoring cycle per paid profile: fresh research scan →
 // diff vs the profile's latest snapshot → store the snapshot → write + store
 // the brief → email the brief. Emails are only sent for briefs with no
 // emailed_at, so re-running the job (or a scheduler retry) never double-sends.
-// Point your scheduler (e.g. weekly, Monday 08:00) at this route with
-// `Authorization: Bearer $LOVABLE_CRON_SECRET`.
+//
+// The weekly digest is a paid-tier feature (Watch and above): free profiles
+// are skipped without spending any research budget. Append `?force=1` to
+// include them — for end-to-end testing before a real subscription exists.
+// Point your scheduler at this route with `Authorization: Bearer $LOVABLE_CRON_SECRET`
+// (the bundled GitHub Action already does this weekly).
 async function runWeeklyMonitoring(request: Request): Promise<Response> {
   const unauthorized = await authenticateCronRequest(request);
   if (unauthorized) return unauthorized;
+
+  const force = new URL(request.url).searchParams.get("force") === "1";
 
   try {
     const [
@@ -68,11 +75,19 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
     const failed: Array<{ profileId: string; error: string }> = [];
     let processed = 0;
     let emailed = 0;
+    let skippedUnpaid = 0;
 
     for (const profile of profiles ?? []) {
       const businessName = profile.business_name ?? "";
       const location = profile.location ?? "";
       if (!businessName.trim() || !location.trim()) continue;
+
+      // Paid tiers only (column tolerated as absent — select("*")).
+      const tier = (profile as { plan_tier?: string | null }).plan_tier ?? "free";
+      if (!force && tier !== "watch" && tier !== "advise") {
+        skippedUnpaid += 1;
+        continue;
+      }
       try {
         const input = {
           businessName,
@@ -183,7 +198,7 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
       }
     }
 
-    return jsonResponse({ ok: true, processed, emailed, failed });
+    return jsonResponse({ ok: true, processed, emailed, skippedUnpaid, failed });
   } catch (error) {
     console.error("runWeeklyMonitoring failed", error);
     return jsonResponse(
