@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { PricingSection, type PricingPlan } from "@/components/ui/pricing";
+import { getBillingStatus } from "@/lib/account.functions";
 import { usePaddleCheckout } from "@/lib/use-paddle-checkout";
 
 // Plans for the upgrade overlay — mirrors the landing page's pricing, with
@@ -19,7 +21,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Review sentiment summary",
       "Market snapshot & your rating rank",
     ],
-    buttonText: "Current plan",
+    buttonText: "Subscribe",
     href: "#",
     tier: "watch",
   },
@@ -77,8 +79,12 @@ export function UpgradeOverlay({
   title?: string | undefined;
 }) {
   const { ready: paddleReady, error: paddleError, openCheckout } = usePaddleCheckout();
+  const fetchBilling = useServerFn(getBillingStatus);
   const [session, setSession] = useState<{ email?: string | undefined; userId?: string | undefined }>({});
   const [checkoutError, setCheckoutError] = useState("");
+  // The viewer's tier drives the plan buttons: their tier reads "Current
+  // plan", tiers included in it read "Included in your plan".
+  const [currentTier, setCurrentTier] = useState<"free" | "watch" | "advise" | "expand" | undefined>(undefined);
 
   useEffect(() => {
     if (!open) return;
@@ -96,6 +102,21 @@ export function UpgradeOverlay({
       active = false;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    fetchBilling()
+      .then(({ status }) => {
+        if (active) setCurrentTier(status.planTier);
+      })
+      .catch(() => {
+        // Billing unavailable — cards stay actionable rather than blocking.
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, fetchBilling]);
 
   useEffect(() => {
     if (!open) return;
@@ -153,6 +174,7 @@ export function UpgradeOverlay({
           compact
           className="bg-transparent py-6 sm:py-8"
           onSelect={handleSelect}
+          currentTier={currentTier}
         />
       </div>
     </div>

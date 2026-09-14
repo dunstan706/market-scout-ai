@@ -31,7 +31,7 @@ import type { DetectedChange } from "@/lib/change-detection";
 type ViewState = "checking" | "signedOut" | "setup" | "ready";
 type GenState = "idle" | "loading" | "done" | "error";
 type BusinessTab = "details" | "monitoring" | "scan";
-type Screen = "business" | "add" | "plans";
+type Screen = "business" | "add";
 
 const BUSINESS_TYPES: Array<{ value: BusinessType; label: string }> = [
   { value: "salon", label: "Salon" },
@@ -231,8 +231,8 @@ export function LegacyDashboard() {
       setScreen("add");
       return;
     }
-    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier]) {
-      setScreen("plans");
+    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier] || PLAN_BUSINESS_LIMITS[tier] === 0) {
+      setPricingOpen(true);
       return;
     }
     // Under the cap but already has businesses — editing existing ones; the
@@ -517,47 +517,6 @@ export function LegacyDashboard() {
                   Includes one business. Upgrade any time to watch more.
                 </p>
               </form>
-            </section>
-          )}
-
-          {screen === "plans" && (
-            <section className="space-y-8 animate-ls-fade" aria-label="Plans">
-              <header>
-                <p className="eyebrow">Plans</p>
-                <h1 className="mt-2 font-serif text-3xl md:text-4xl">Watch more businesses</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Watching multiple businesses is part of our paid plans. Your account includes one — pick a plan to
-                  add more.
-                </p>
-              </header>
-
-              <ul className="paper-card max-w-lg divide-y divide-rule rounded-md p-2 md:p-3">
-                <li className="flex items-baseline justify-between gap-4 px-4 py-3.5">
-                  <div>
-                    <p className="font-serif text-lg">Starter</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">One business — what you have today</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-medium">$15/mo</p>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 px-4 py-3.5">
-                  <div>
-                    <p className="font-serif text-lg">Pro</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">Up to five businesses</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-medium">$50/mo</p>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 px-4 py-3.5">
-                  <div>
-                    <p className="font-serif text-lg">Enterprise</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">Unlimited businesses</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-medium">Ask for a quote</p>
-                </li>
-              </ul>
-              <p className="max-w-lg text-xs leading-relaxed text-muted-foreground">
-                Billing is not open yet — we&apos;ll let you know when it is. Until then, the free plan covers one
-                business.
-              </p>
             </section>
           )}
 

@@ -130,6 +130,10 @@ interface PricingSectionProps {
    *  self-contained behaviour. */
   isMonthly?: boolean;
   onIsMonthlyChange?: ((monthly: boolean) => void) | undefined;
+  /** The viewer's plan tier — plan cards at or below it read "Current plan"
+   *  / "Included in your plan" and disable, instead of offering an upgrade
+   *  the user already has. Omit on public pricing pages. */
+  currentTier?: "free" | "watch" | "advise" | "expand" | undefined;
 }
 
 // Context for state management
@@ -137,6 +141,7 @@ const PricingContext = createContext<{
   isMonthly: boolean;
   setIsMonthly: (value: boolean) => void;
   onSelect?: ((plan: PricingPlan, isMonthly: boolean) => void) | undefined;
+  currentTier?: "free" | "watch" | "advise" | "expand" | undefined;
 }>({
   isMonthly: true,
   setIsMonthly: () => {},
@@ -153,6 +158,7 @@ export function PricingSection({
   onSelect,
   isMonthly: isMonthlyProp,
   onIsMonthlyChange,
+  currentTier,
 }: PricingSectionProps) {
   const [internalMonthly, setInternalMonthly] = useState(true);
   const controlled = isMonthlyProp !== undefined && onIsMonthlyChange !== undefined;
@@ -163,7 +169,7 @@ export function PricingSection({
   };
 
   return (
-    <PricingContext.Provider value={{ isMonthly, setIsMonthly, onSelect }}>
+    <PricingContext.Provider value={{ isMonthly, setIsMonthly, onSelect, currentTier }}>
 
       <div
         className={cn(
@@ -322,8 +328,20 @@ function PricingCard({
   index: number;
   compact?: boolean;
 }) {
-  const { isMonthly, onSelect } = useContext(PricingContext);
+  const { isMonthly, onSelect, currentTier } = useContext(PricingContext);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+
+  // Tier awareness: at the current tier the button reads "Current plan";
+  // tiers already included in the subscription read "Included in your plan".
+  // Both disable the CTA — no paying for something you have.
+  const TIER_ORDER = { free: 0, watch: 1, advise: 2, expand: 3 } as const;
+  const viewerRank = currentTier ? TIER_ORDER[currentTier] : undefined;
+  const planRank = plan.tier ? TIER_ORDER[plan.tier] : undefined;
+  const isCurrentTier =
+    viewerRank !== undefined && planRank !== undefined && planRank === viewerRank;
+  const isIncludedTier =
+    viewerRank !== undefined && planRank !== undefined && planRank < viewerRank;
+  const isDisabledPlan = isCurrentTier || isIncludedTier;
 
   const numericPrice = Number(plan.price);
   const hasFixedPrice = plan.price.trim() !== "" && !Number.isNaN(numericPrice);
@@ -442,15 +460,17 @@ function PricingCard({
             <button
               type="button"
               onClick={() => onSelect(plan, isMonthly)}
+              disabled={isDisabledPlan}
               className={cn(
                 buttonVariants({
                   variant: plan.isPopular ? "default" : "outline",
                   size: compact ? "sm" : "lg",
                 }),
                 "w-full",
+                isDisabledPlan && "cursor-default opacity-60",
               )}
             >
-              {plan.buttonText}
+              {isCurrentTier ? "Current plan" : isIncludedTier ? "Included in your plan" : plan.buttonText}
             </button>
           ) : (
             <a
