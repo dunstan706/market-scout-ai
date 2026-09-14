@@ -18,6 +18,7 @@ import {
   listBriefs,
   listBusinesses,
   saveBusiness,
+  deleteBusiness,
   PLAN_BUSINESS_LIMITS,
   type BillingStatus,
   type BriefRecord,
@@ -67,6 +68,7 @@ export function GlobeDashboard() {
   const claimProfile = useServerFn(claimWaitlistProfile);
   const fetchBilling = useServerFn(getBillingStatus);
   const persistBusiness = useServerFn(saveBusiness);
+  const deleteBusinessFn = useServerFn(deleteBusiness);
   const fetchStatus = useServerFn(getMonitoringStatus);
   const fetchBriefs = useServerFn(listBriefs);
   const runMonitoring = useServerFn(generateMonitoringBrief);
@@ -141,6 +143,11 @@ export function GlobeDashboard() {
   });
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
+  // Delete flow (Details tab): two-step confirm so a stray click can't erase
+  // a business together with its scan history and briefs.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteState, setDeleteState] = useState<"idle" | "deleting">("idle");
+  const [deleteError, setDeleteError] = useState("");
 
   const [status, setStatus] = useState<MonitoringStatus>(EMPTY_STATUS);
   const [briefs, setBriefs] = useState<BriefRecord[]>([]);
@@ -312,7 +319,8 @@ export function GlobeDashboard() {
     };
   }, [expanded, activeId, fetchStatus, fetchBriefs]);
 
-  // Seed the details form whenever the active business changes.
+  // Seed the details form whenever the active business changes (and disarm
+  // any armed delete — confirmations never carry across businesses).
   useEffect(() => {
     if (!activeBusiness) return;
     setDetailDraft({
@@ -321,6 +329,8 @@ export function GlobeDashboard() {
       location: activeBusiness.location,
       pricePoint: activeBusiness.pricePoint ?? "",
     });
+    setConfirmDelete(false);
+    setDeleteError("");
   }, [activeBusiness?.id]);
 
   // Selecting a business from the nav dropdown: the globe rotates to bring its
@@ -439,6 +449,30 @@ export function GlobeDashboard() {
       console.error(err);
       setAddError(message);
       setAddState("error");
+    }
+  }
+
+  async function onDeleteBusiness() {
+    if (!activeBusiness) return;
+    setDeleteState("deleting");
+    setDeleteError("");
+    try {
+      await deleteBusinessFn({ data: activeBusiness.id });
+      const remaining = businesses.filter((b) => b.id !== activeBusiness.id);
+      setBusinesses(remaining);
+      setConfirmDelete(false);
+      setDeleteState("idle");
+      if (remaining.length > 0 && remaining[0]) {
+        setActiveId(remaining[0].id); // next business takes the mark
+      } else {
+        setActiveId(null);
+        closeScan(); // none left — back to the pristine globe, + pill returns
+      }
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Could not delete the business. Please try again.",
+      );
+      setDeleteState("idle");
     }
   }
 
@@ -735,6 +769,46 @@ export function GlobeDashboard() {
                   </button>
                   {savedFlash && <p className="text-sm text-signal-green">Saved.</p>}
                   {savedError && <p className="text-sm text-signal-red">{savedError}</p>}
+
+                  {/* Danger zone — deletion also erases this business's scan
+                      history and briefs, so it asks twice. */}
+                  <div className="mt-6 rounded-md border border-signal-red/30 bg-card/40 p-3.5">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-signal-red/80">
+                      Danger zone
+                    </p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      Removes this business with its scan history and briefs. Your other
+                      businesses are unaffected.
+                    </p>
+                    {confirmDelete ? (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={onDeleteBusiness}
+                          disabled={deleteState === "deleting"}
+                          className="flex-1 rounded-sm bg-signal-red px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-signal-red/85 disabled:opacity-60"
+                        >
+                          {deleteState === "deleting" ? "Deleting…" : "Yes, delete permanently"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(false)}
+                          className="rounded-sm border border-rule px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Keep
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        className="mt-3 w-full rounded-sm border border-signal-red/40 px-3 py-2 text-xs font-medium text-signal-red transition-colors hover:bg-signal-red/10"
+                      >
+                        Delete this business
+                      </button>
+                    )}
+                    {deleteError && <p className="mt-2 text-xs text-signal-red">{deleteError}</p>}
+                  </div>
                 </form>
               )}
 
