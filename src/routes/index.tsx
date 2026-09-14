@@ -327,6 +327,9 @@ function Index() {
           <Link to="/refund" className="underline decoration-rule underline-offset-2 hover:text-foreground">
             Refunds
           </Link>
+          <Link to="/affiliates" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+            Affiliates
+          </Link>
           <p>Starting with salons & spas. More verticals soon.</p>
         </div>
       </footer>

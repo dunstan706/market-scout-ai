@@ -231,6 +231,7 @@ function ProfilePage() {
           { name: "Business", children: businessMenuItems },
           { name: "Plans", onClick: () => setPricingOpen(true) },
           { name: "Profile", href: "/profile" },
+          { name: "Affiliates", href: "/affiliates" },
           { name: "Sign out", onClick: onSignOut, danger: true },
         ]}
       />

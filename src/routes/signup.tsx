@@ -1,7 +1,10 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthLayout, authButton, authInput } from "@/components/AuthLayout";
+import { claimReferral } from "@/lib/affiliate.functions";
+import { readRefCookie } from "@/lib/use-ref-capture";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
@@ -38,9 +41,25 @@ type SignupSearch = {
   cadence?: "monthly" | "yearly" | undefined;
 };
 
+// Affiliate attribution lock — signup only. The ref cookie was set on the
+// visitor's first landing; claiming it once pins the customer to that
+// affiliate forever. Best-effort: a failure never blocks account creation.
+// Also called on the email-confirmation path (first login), below.
+async function lockReferral(claimFn: (input: { data: { code: string; sourceUrl?: string } }) => Promise<{ claimed: boolean }>) {
+  try {      const refCode = readRefCookie();
+      if (refCode) {
+        const sourceUrl = typeof window !== "undefined" ? window.location.href : "";
+        await claimFn({ data: { code: refCode, ...(sourceUrl ? { sourceUrl } : {}) } });
+      }
+  } catch {
+    // attribution is best-effort
+  }
+}
+
 function SignupPage() {
   const { email: presetEmail, tier, cadence } = Route.useSearch() as SignupSearch;
   const router = useRouter();
+  const claimReferralFn = useServerFn(claimReferral);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
@@ -69,6 +88,7 @@ function SignupPage() {
         setLoading(false);
         return;
       }
+      await lockReferral(claimReferralFn);
       await router.navigate(
         hasCheckoutIntent
           ? { to: "/pricing", search: { tier, cadence } }

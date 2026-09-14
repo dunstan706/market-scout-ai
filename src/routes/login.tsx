@@ -1,7 +1,24 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthLayout, authButton, authInput } from "@/components/AuthLayout";
+import { claimReferral } from "@/lib/affiliate.functions";
+import { readRefCookie } from "@/lib/use-ref-capture";
+
+// Affiliate attribution lock — for accounts created before the ref cookie
+// existed (e.g. email-confirmation signups, whose first session happens
+// here). First attribution wins; best-effort, never blocks login.
+async function lockReferral(claimFn: (input: { data: { code: string; sourceUrl?: string } }) => Promise<{ claimed: boolean }>) {
+  try {      const refCode = readRefCookie();
+      if (refCode) {
+        const sourceUrl = typeof window !== "undefined" ? window.location.href : "";
+        await claimFn({ data: { code: refCode, ...(sourceUrl ? { sourceUrl } : {}) } });
+      }
+  } catch {
+    // attribution is best-effort
+  }
+}
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -38,6 +55,7 @@ type LoginSearch = {
 
 function LoginPage() {
   const { email: presetEmail, tier, cadence } = Route.useSearch() as LoginSearch;
+  const claimReferralFn = useServerFn(claimReferral);
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -71,6 +89,7 @@ function LoginPage() {
         setLoading(false);
         return;
       }
+      await lockReferral(claimReferralFn);
       await router.navigate(
         hasCheckoutIntent
           ? { to: "/pricing", search: { tier, cadence } }

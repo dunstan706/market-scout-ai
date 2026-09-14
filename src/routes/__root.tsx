@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { RefCapture } from "../lib/use-ref-capture";
 
 function NotFoundComponent() {
   return (
@@ -149,6 +150,9 @@ function RootComponent() {
       >
         <Outlet />
       </div>
+      {/* Affiliate link capture — reads ?ref= on any route into a
+          first-party cookie (first click wins, 60-day window). */}
+      <RefCapture />
     </QueryClientProvider>
   );
 }

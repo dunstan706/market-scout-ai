@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AffiliatesRouteImport } from './routes/affiliates'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DashboardtestRouteImport } from './routes/dashboardtest'
 import { Route as LoginRouteImport } from './routes/login'
@@ -19,6 +20,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RefundRouteImport } from './routes/refund'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as AdminAffiliatesRouteImport } from './routes/admin/affiliates'
 import { Route as ApiCronRunAlertsRouteImport } from './routes/api/cron/run-alerts'
 import { Route as ApiCronRunMonitoringRouteImport } from './routes/api/cron/run-monitoring'
 import { Route as ApiWebhooksPaddleRouteImport } from './routes/api/webhooks/paddle'
@@ -28,6 +30,11 @@ import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/em
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AffiliatesRoute = AffiliatesRouteImport.update({
+  id: '/affiliates',
+  path: '/affiliates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -75,6 +82,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAffiliatesRoute = AdminAffiliatesRouteImport.update({
+  id: '/admin/affiliates',
+  path: '/admin/affiliates',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronRunAlertsRoute = ApiCronRunAlertsRouteImport.update({
   id: '/api/cron/run-alerts',
   path: '/api/cron/run-alerts',
@@ -103,6 +115,7 @@ const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/affiliates': typeof AffiliatesRoute
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
@@ -112,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/admin/affiliates': typeof AdminAffiliatesRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
@@ -120,6 +134,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/affiliates': typeof AffiliatesRoute
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
@@ -129,6 +144,7 @@ export interface FileRoutesByTo {
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/admin/affiliates': typeof AdminAffiliatesRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
@@ -138,6 +154,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/affiliates': typeof AffiliatesRoute
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
@@ -147,6 +164,7 @@ export interface FileRoutesById {
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/admin/affiliates': typeof AdminAffiliatesRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
@@ -157,6 +175,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/affiliates'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
@@ -166,6 +185,7 @@ export interface FileRouteTypes {
     | '/refund'
     | '/signup'
     | '/terms'
+    | '/admin/affiliates'
     | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
@@ -174,6 +194,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/affiliates'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
@@ -183,6 +204,7 @@ export interface FileRouteTypes {
     | '/refund'
     | '/signup'
     | '/terms'
+    | '/admin/affiliates'
     | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
@@ -191,6 +213,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/affiliates'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
@@ -200,6 +223,7 @@ export interface FileRouteTypes {
     | '/refund'
     | '/signup'
     | '/terms'
+    | '/admin/affiliates'
     | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
@@ -209,6 +233,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AffiliatesRoute: typeof AffiliatesRoute
   DashboardRoute: typeof DashboardRoute
   DashboardtestRoute: typeof DashboardtestRoute
   LoginRoute: typeof LoginRoute
@@ -218,6 +243,7 @@ export interface RootRouteChildren {
   RefundRoute: typeof RefundRoute
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
+  AdminAffiliatesRoute: typeof AdminAffiliatesRoute
   ApiCronRunAlertsRoute: typeof ApiCronRunAlertsRoute
   ApiCronRunMonitoringRoute: typeof ApiCronRunMonitoringRoute
   ApiWebhooksPaddleRoute: typeof ApiWebhooksPaddleRoute
@@ -232,6 +258,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/affiliates': {
+      id: '/affiliates'
+      path: '/affiliates'
+      fullPath: '/affiliates'
+      preLoaderRoute: typeof AffiliatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -297,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/affiliates': {
+      id: '/admin/affiliates'
+      path: '/admin/affiliates'
+      fullPath: '/admin/affiliates'
+      preLoaderRoute: typeof AdminAffiliatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/run-alerts': {
       id: '/api/cron/run-alerts'
       path: '/api/cron/run-alerts'
@@ -337,6 +377,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AffiliatesRoute: AffiliatesRoute,
   DashboardRoute: DashboardRoute,
   DashboardtestRoute: DashboardtestRoute,
   LoginRoute: LoginRoute,
@@ -346,6 +387,7 @@ const rootRouteChildren: RootRouteChildren = {
   RefundRoute: RefundRoute,
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
+  AdminAffiliatesRoute: AdminAffiliatesRoute,
   ApiCronRunAlertsRoute: ApiCronRunAlertsRoute,
   ApiCronRunMonitoringRoute: ApiCronRunMonitoringRoute,
   ApiWebhooksPaddleRoute: ApiWebhooksPaddleRoute,

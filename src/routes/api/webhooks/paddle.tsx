@@ -22,6 +22,7 @@ type PaddleSubscription = {
   status?: string;
   customer_id?: string;
   custom_data?: Record<string, unknown> | null;
+  started_at?: string | null;
   current_billing_period?: { starts_at?: string; ends_at?: string } | null;
   next_billed_at?: string | null;
   items?: Array<{
@@ -38,6 +39,17 @@ type PaddleTransaction = {
   customer_id?: string;
   subscription_id?: string;
   custom_data?: Record<string, unknown> | null;
+  currency_code?: string;
+  details?: {
+    totals?: { subtotal?: string } | null;
+  } | null;
+  items?: PaddleSubscription["items"];
+};
+
+type PaddleAdjustment = {
+  id?: string;
+  action?: string; // refund | chargeback | credit | ...
+  transaction_id?: string;
 };
 
 type ProfileBillingRow = {
@@ -222,6 +234,87 @@ async function applySubscription(
   }
 }
 
+// The generated Database type carries an empty Functions map (the affiliate
+// RPCs are created by a raw SQL migration), so calls go through a
+// string-typed overload.
+type RpcClient = {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+};
+
+async function callRpc(
+  supabaseAdmin: { from: (table: string) => any },
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<{ error: { message: string } | null }> {
+  return (supabaseAdmin as unknown as RpcClient).rpc(fn, args);
+}
+
+// Affiliate commission engine (see 20260914120000_add_affiliate_program.sql):
+// 10% of each subscription payment (excl. tax) for referred customers during
+// the first 12 months of their subscription. Attribution is locked at signup
+// (affiliate_referrals), so checkout needed no changes — the user id that
+// already rides in checkout custom_data (or the stored paddle customer
+// mapping) identifies the buyer. Idempotent: commissions are unique per
+// Paddle transaction id, so replayed deliveries never double-pay.
+async function applyAffiliateCommission(
+  supabaseAdmin: { from: (table: string) => any },
+  tx: PaddleTransaction,
+  occurredAt: string | null,
+): Promise<void> {
+  try {
+    if (!tx.id) return;
+    // Subscriptions only — the storefront sells no one-off purchases.
+    if (!tx.subscription_id) return;
+
+    const profile = await resolveProfileRow(supabaseAdmin, {
+      ...(tx.customer_id ? { customer_id: tx.customer_id } : {}),
+      custom_data: tx.custom_data ?? null,
+    });
+    if (!profile?.id) return;
+
+    const { paddleRequest } = await import("@/lib/paddle.server");
+    const { data: sub } = await paddleRequest<PaddleSubscription>(
+      "GET",
+      `/subscriptions/${encodeURIComponent(tx.subscription_id)}`,
+    );
+    if (!sub) return;
+    const interval = sub.items?.[0]?.price?.billing_cycle?.interval;
+    if (interval !== "month" && interval !== "year") return;
+
+    // Payment number: 1 for the first payment, then one per cadence step
+    // elapsed since the subscription start (renewals, upgrades included).
+    const startRaw = sub.started_at ?? sub.current_billing_period?.starts_at ?? null;
+    let paymentNumber = 1;
+    if (startRaw && occurredAt) {
+      const stepMs = interval === "month" ? 30.44 * 86_400_000 : 365.25 * 86_400_000;
+      const elapsed = Date.parse(occurredAt) - Date.parse(startRaw);
+      paymentNumber = Math.max(1, Math.floor(elapsed / stepMs) + 1);
+    }
+
+    // Commission basis: the payment subtotal excluding tax, major units.
+    const subtotalMinor = tx.details?.totals?.subtotal;
+    if (!subtotalMinor) return;
+    const paymentAmount = Number.parseInt(subtotalMinor, 10) / 100;
+
+    const { error } = await callRpc(supabaseAdmin, "record_affiliate_commission", {
+      p_referred_user_id: profile.id,
+      p_transaction_id: tx.id,
+      p_payment_amount: paymentAmount,
+      p_payment_number: paymentNumber,
+      p_subscription_start: startRaw,
+      p_event_time: occurredAt,
+    });
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    // A commission failure must never fail the webhook — fulfillment (the
+    // subscription apply) has already happened by this point.
+    console.error("affiliate commission failed", error instanceof Error ? error.message : error);
+  }
+}
+
 async function handlePaddleWebhook(request: Request): Promise<Response> {
   const secret = process.env["PADDLE_WEBHOOK_SECRET"]?.trim();
   if (!secret) {
@@ -274,11 +367,27 @@ async function handlePaddleWebhook(request: Request): Promise<Response> {
         );
         if (sub) await applySubscription(supabaseAdmin, sub);
       }
+      // Affiliate commission for this payment — a no-op when the buyer was
+      // never referred or is past the 12-month commission window.
+      await applyAffiliateCommission(supabaseAdmin, tx, event.occurred_at ?? null);
       return jsonResponse({ received: true });
     }
 
-    // Anything else (adjustment.*, customer.*, ...) is acknowledged but not
-    // acted on.
+    if (eventType === "adjustment.updated") {
+      // Refunds and chargebacks reverse any commission tied to the
+      // transaction (no-op when already reversed or never created).
+      const adj = event.data as PaddleAdjustment;
+      if ((adj.action === "refund" || adj.action === "chargeback") && adj.transaction_id) {
+        const { error } = await callRpc(supabaseAdmin, "reverse_affiliate_commissions", {
+          p_transaction_id: adj.transaction_id,
+        });
+        if (error) throw new Error(error.message);
+      }
+      return jsonResponse({ received: true });
+    }
+
+    // Anything else (customer.*, adjustment.credit, ...) is acknowledged but
+    // not acted on.
     return jsonResponse({ received: true });
   } catch (error) {
     console.error("paddle webhook handler failed", error instanceof Error ? error.message : error);

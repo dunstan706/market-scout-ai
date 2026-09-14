@@ -76,6 +76,18 @@ const SECTIONS: Array<[string, ReactNode]> = [
     "These terms are governed by the laws of the country in which theBizScope is established, without regard to its conflict-of-law rules. Nothing here stops you from using mandatory consumer rights where you live.",
   ],
   [
+    "Affiliate program",
+    [
+      "These rules govern theBizScope's affiliate program and form part of the terms. Applying to the program (at thebizscope.com/affiliates) means you accept them.",
+      "Commissions. Approved affiliates earn 10% of each subscription payment (excluding tax) made by customers attributed to them, for the first 12 payments of each referred customer's subscription — monthly plans for their first 12 monthly payments, annual plans for the first annual payment. Commissions follow the actual amounts customers pay, including the effects of upgrades, downgrades, and coupon discounts.",
+      "Attribution. A customer is attributed to the affiliate whose referral link the visitor used when creating their account — first referral wins, and the customer stays attributed permanently. Clicks after signup don't change attribution, and accounts that existed before joining the program can't be attributed.",
+      "Exclusions. Self-referrals earn nothing: you can't earn a commission on your own account, an account sharing your email, or a purchase you route through yourself in any other way. We also withhold commissions on accounts we find to be fraudulent, spam-sourced, or abusive.",
+      "Refunds. A commission reverses when its payment is refunded or charged back. Commissions sit in a pending state for 30 days after each payment before becoming payable, so refunds resolve inside the holding window.",
+      "Payouts. We run payouts monthly. A balance becomes payable once it exceeds $25 and its commissions have matured; smaller balances roll forward. Payouts are made by bank transfer or another method we agree on, to the payout details you provide. You're responsible for your own taxes — we don't withhold income tax on affiliate earnings, and we may ask for tax details before a first payout.",
+      "Term and changes. We may suspend or remove an affiliate who breaks these rules, with the affected commissions forfeited in cases of fraud or abuse. We may change commission rates for future referrals with 14 days' notice — the rates on existing referred customers don't change.",
+    ],
+  ],
+  [
     "Contact",
     "Questions about these terms? Email us at support@thebizscope.com.",
   ],

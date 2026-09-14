@@ -53,6 +53,150 @@ export type Database = {
         }
         Relationships: []
       }
+      affiliate_commissions: {
+        Row: {
+          id: string
+          affiliate_id: string
+          referred_user_id: string
+          transaction_id: string
+          payment_number: number
+          amount: number
+          currency_code: string
+          status: string
+          payable_after: string
+          payout_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          affiliate_id: string
+          referred_user_id: string
+          transaction_id: string
+          payment_number: number
+          amount: number
+          currency_code?: string
+          status?: string
+          payable_after: string
+          payout_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          affiliate_id?: string
+          referred_user_id?: string
+          transaction_id?: string
+          payment_number?: number
+          amount?: number
+          currency_code?: string
+          status?: string
+          payable_after?: string
+          payout_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      affiliate_payouts: {
+        Row: {
+          id: string
+          affiliate_id: string
+          amount: number
+          currency_code: string
+          reference: string | null
+          paid_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          affiliate_id: string
+          amount: number
+          currency_code?: string
+          reference?: string | null
+          paid_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          affiliate_id?: string
+          amount?: number
+          currency_code?: string
+          reference?: string | null
+          paid_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      affiliate_referrals: {
+        Row: {
+          id: string
+          affiliate_id: string
+          referred_user_id: string
+          referred_email: string | null
+          source_url: string | null
+          converted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          affiliate_id: string
+          referred_user_id: string
+          referred_email?: string | null
+          source_url?: string | null
+          converted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          affiliate_id?: string
+          referred_user_id?: string
+          referred_email?: string | null
+          source_url?: string | null
+          converted_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      affiliates: {
+        Row: {
+          id: string
+          user_id: string | null
+          code: string
+          email: string
+          name: string | null
+          status: string
+          payout_email: string | null
+          payout_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          code: string
+          email: string
+          name?: string | null
+          status?: string
+          payout_email?: string | null
+          payout_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          code?: string
+          email?: string
+          name?: string | null
+          status?: string
+          payout_email?: string | null
+          payout_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       briefs: {
         Row: {
           brief: Json
