@@ -10,6 +10,7 @@ import { UpgradeOverlay } from "@/components/UpgradeOverlay";
 import {
   claimWaitlistProfile,
   createBusiness,
+  deleteBusiness,
   getBillingStatus,
   listBusinesses,
   getMonitoringStatus,
@@ -69,6 +70,7 @@ export function LegacyDashboard() {
   const fetchBusinesses = useServerFn(listBusinesses);
   const persistBusiness = useServerFn(saveBusiness);
   const addBusiness = useServerFn(createBusiness);
+  const deleteBusinessFn = useServerFn(deleteBusiness);
   const claimProfile = useServerFn(claimWaitlistProfile);
   const fetchBilling = useServerFn(getBillingStatus);
   const runMonitoring = useServerFn(generateMonitoringBrief);
@@ -94,6 +96,11 @@ export function LegacyDashboard() {
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
   const [addError, setAddError] = useState("");
+  // Delete flow (Details tab): two-step confirm so a stray click can't erase
+  // a business together with its scan history and briefs.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteState, setDeleteState] = useState<"idle" | "deleting">("idle");
+  const [deleteError, setDeleteError] = useState("");
   const [missingTables, setMissingTables] = useState<string[]>([]);
 
   const [status, setStatus] = useState<MonitoringStatus>(EMPTY_STATUS);
@@ -219,25 +226,25 @@ export function LegacyDashboard() {
     setTabDir(null);
     setSavedFlash(false);
     setSavedError("");
+    setConfirmDelete(false); // confirmations never carry across businesses
+    setDeleteError("");
   }
 
   // Tier cap (server-enforced too): free = 0 new, Watch = 1, Advise = 5.
   // With room left this opens the add form; at the cap it points at plans.
   function onAddClick() {
     const tier = billingStatus?.planTier ?? "free";
-    if (businesses.length === 0 && PLAN_BUSINESS_LIMITS[tier] > 0) {
-      setDraft({ businessName: "", businessType: "salon", location: "", pricePoint: "" });
-      setAddError("");
-      setScreen("add");
-      return;
-    }
-    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier] || PLAN_BUSINESS_LIMITS[tier] === 0) {
+    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier]) {
+      // At the tier cap (including free = 0) — plans overlay, not a form that
+      // would only fail server-side.
       setPricingOpen(true);
       return;
     }
-    // Under the cap but already has businesses — editing existing ones; the
-    // add form only makes sense from an empty rail.
-    setScreen("business");
+    // Room under the cap — open the add form (this is also the empty-account
+    // path, and the multi-business path on Watch/Advise).
+    setDraft({ businessName: "", businessType: "salon", location: "", pricePoint: "" });
+    setAddError("");
+    setScreen("add");
   }
 
   async function onAddBusiness(e: FormEvent<HTMLFormElement>) {
@@ -260,6 +267,45 @@ export function LegacyDashboard() {
         err instanceof Error && err.message ? err.message : "Could not add your business. Please try again.";
       console.error(err);
       setAddError(message);
+    }
+  }
+
+  async function onDeleteBusiness() {
+    if (!activeId) return;
+    setDeleteState("deleting");
+    setDeleteError("");
+    try {
+      await deleteBusinessFn({ data: activeId });
+      const remaining = businesses.filter((b) => b.id !== activeId);
+      setBusinesses(remaining);
+      setConfirmDelete(false);
+      setDeleteState("idle");
+      const next = remaining[0];
+      if (next) {
+        setActiveId(next.id);
+        setDraft({
+          businessName: next.businessName,
+          businessType: next.businessType,
+          location: next.location,
+          pricePoint: next.pricePoint ?? "",
+        });
+        setScreen("business");
+      } else {
+        setActiveId(null);
+        // None left: the add form when the tier allows it, plans otherwise.
+        const tier = billingStatus?.planTier ?? "free";
+        if (PLAN_BUSINESS_LIMITS[tier] > 0) {
+          setDraft({ businessName: "", businessType: "salon", location: "", pricePoint: "" });
+          setScreen("add");
+        } else {
+          setPricingOpen(true);
+        }
+      }
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Could not delete the business. Please try again.",
+      );
+      setDeleteState("idle");
     }
   }
 
@@ -649,6 +695,46 @@ export function LegacyDashboard() {
                   </button>
                   {savedFlash && <p className="text-sm text-signal-green">Saved.</p>}
                   {savedError && <p className="text-sm text-signal-red">{savedError}</p>}
+
+                  {/* Danger zone — deletion also erases this business's scan
+                      history and briefs, so it asks twice. */}
+                  <div className="mt-5 rounded-md border border-signal-red/30 bg-signal-red-soft/30 p-4">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-signal-red/80">
+                      Danger zone
+                    </p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      Removes this business with its scan history and briefs. Your other
+                      businesses are unaffected.
+                    </p>
+                    {confirmDelete ? (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={onDeleteBusiness}
+                          disabled={deleteState === "deleting"}
+                          className="flex-1 rounded-sm bg-signal-red px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-signal-red/85 disabled:opacity-60"
+                        >
+                          {deleteState === "deleting" ? "Deleting…" : "Yes, delete permanently"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(false)}
+                          className="rounded-sm border border-rule px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Keep
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        className="mt-3 w-full rounded-sm border border-signal-red/40 px-3 py-2 text-xs font-medium text-signal-red transition-colors hover:bg-signal-red/10"
+                      >
+                        Delete this business
+                      </button>
+                    )}
+                    {deleteError && <p className="mt-2 text-xs text-signal-red">{deleteError}</p>}
+                  </div>
                 </form>
               )}
 
