@@ -24,8 +24,9 @@ export const Route = createFileRoute("/")({
         content: "We watch your local market for you and tell you what you need to know. Built for salon & spa owners.",
       },
       { property: "og:type", content: "website" },
-      // TODO: swap to an absolute URL (https://your-domain/og.png) once the production domain is known.
-      { property: "og:image", content: "/og.png" },
+      // Absolute URL — social scrapers (Facebook, LinkedIn, X) ignore
+      // relative og:image values, so the link preview would ship imageless.
+      { property: "og:image", content: "https://thebizscope.com/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
