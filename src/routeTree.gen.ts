@@ -19,6 +19,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RefundRouteImport } from './routes/refund'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as ApiCronRunAlertsRouteImport } from './routes/api/cron/run-alerts'
 import { Route as ApiCronRunMonitoringRouteImport } from './routes/api/cron/run-monitoring'
 import { Route as ApiWebhooksPaddleRouteImport } from './routes/api/webhooks/paddle'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -74,6 +75,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronRunAlertsRoute = ApiCronRunAlertsRouteImport.update({
+  id: '/api/cron/run-alerts',
+  path: '/api/cron/run-alerts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronRunMonitoringRoute = ApiCronRunMonitoringRouteImport.update({
   id: '/api/cron/run-monitoring',
   path: '/api/cron/run-monitoring',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
+  '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/refund'
     | '/signup'
     | '/terms'
+    | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
     | '/lovable/email/auth/preview'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/refund'
     | '/signup'
     | '/terms'
+    | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
     | '/lovable/email/auth/preview'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/refund'
     | '/signup'
     | '/terms'
+    | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
     | '/lovable/email/auth/preview'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   RefundRoute: typeof RefundRoute
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
+  ApiCronRunAlertsRoute: typeof ApiCronRunAlertsRoute
   ApiCronRunMonitoringRoute: typeof ApiCronRunMonitoringRoute
   ApiWebhooksPaddleRoute: typeof ApiWebhooksPaddleRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/run-alerts': {
+      id: '/api/cron/run-alerts'
+      path: '/api/cron/run-alerts'
+      fullPath: '/api/cron/run-alerts'
+      preLoaderRoute: typeof ApiCronRunAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/run-monitoring': {
       id: '/api/cron/run-monitoring'
       path: '/api/cron/run-monitoring'
@@ -326,6 +346,7 @@ const rootRouteChildren: RootRouteChildren = {
   RefundRoute: RefundRoute,
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
+  ApiCronRunAlertsRoute: ApiCronRunAlertsRoute,
   ApiCronRunMonitoringRoute: ApiCronRunMonitoringRoute,
   ApiWebhooksPaddleRoute: ApiWebhooksPaddleRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,

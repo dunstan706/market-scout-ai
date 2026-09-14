@@ -125,6 +125,51 @@ export type Database = {
         }
         Relationships: []
       }
+      market_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          alert_kind: string
+          business_id: string
+          competitor_name: string | null
+          created_at: string
+          detail: string | null
+          email_sent_at: string | null
+          headline: string
+          id: string
+          kind: string
+          tone: string
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          alert_kind?: string
+          business_id: string
+          competitor_name?: string | null
+          created_at?: string
+          detail?: string | null
+          email_sent_at?: string | null
+          headline: string
+          id?: string
+          kind: string
+          tone: string
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          alert_kind?: string
+          business_id?: string
+          competitor_name?: string | null
+          created_at?: string
+          detail?: string | null
+          email_sent_at?: string | null
+          headline?: string
+          id?: string
+          kind?: string
+          tone?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           billing_cadence: string | null

@@ -472,7 +472,105 @@ export function detectChanges(
   return changes.sort((a, b) => rank(a) - rank(b)).slice(0, MAX_CHANGES);
 }
 
-// --- Rendering detected changes as brief signals ---
+// --- Instant-alert classification (Advise tier daily sweep) ---
+//
+// The diff engine reports everything that changed; the alert layer only
+// interrupts the user for moves that matter today. Red = a threat to revenue
+// now, amber = an opportunity or slow threat, and everything else (good
+// news, small drift, structural price-list reshuffles) stays in Monday's
+// weekly brief. Pure function — unit-testable.
+
+export type AlertVerdict = "red" | "amber" | "weekly";
+
+export type AlertClassification = {
+  verdict: AlertVerdict;
+  // Matches the email renderer's alert kinds where one exists; novel
+  // classifications fall back to "general" at the send site.
+  alertKind: "own_review" | "own_rating" | "price_cut" | "new_entrant" | "hours_change" | "competitor_rating" | "general";
+};
+
+// A competitor headline-price move under this threshold is churn, not news.
+const ALERT_PRICE_PCT = 0.1;
+// A competitor rating fall of this size (within a day) opens a poach window.
+const ALERT_RATING_DROP = 0.5;
+
+// Day-of-week tokens present in an opening-hours string. Comparing these
+// sets is a cheap materiality test: reformatting "Mon-Fri 9-5" as
+// "Mon–Fri 09:00–17:00" keeps the same days (weekly-only), while dropping
+// or adding a day ("now open Sundays") is a real shift (alert).
+export function weekdayTokens(hours: string): Set<string> {
+  const tokens = hours.toLowerCase().match(/\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*/g) ?? [];
+  return new Set(tokens.map((token) => token.slice(0, 3)));
+}
+
+// Reads the "4.40 → 3.90" pair out of a change detail line.
+function ratingDeltaFromDetail(detail: string): number | null {
+  const match = /(\d(?:\.\d+)?)\s*→\s*(\d(?:\.\d+)?)/.exec(detail);
+  if (!match) return null;
+  const before = Number(match[1]);
+  const after = Number(match[2]);
+  if (!Number.isFinite(before) || !Number.isFinite(after)) return null;
+  return after - before;
+}
+
+// Reads the "12 → 9" currency pair out of a price-change detail line.
+function pricePctFromDetail(detail: string): number | null {
+  const [before, after] = detail.split("→");
+  if (!before || !after) return null;
+  const oldPrice = parsePrice(before.trim());
+  const newPrice = parsePrice(after.trim().split("·")[0]?.trim() ?? "");
+  if (!oldPrice || !newPrice || oldPrice.currency !== newPrice.currency || oldPrice.amount === 0) return null;
+  return (newPrice.amount - oldPrice.amount) / oldPrice.amount;
+}
+
+export function classifyAlert(change: DetectedChange): AlertClassification | null {
+  switch (change.kind) {
+    case "own_listing": {
+      // Reputation fire on your own door: a scathing review or a rating
+      // slide. Good news — 5★ reviews, rating recoveries, count growth —
+      // waits for Monday by design (the user's call).
+      const stars = /^(?:New )?(\d)?★? review on your listing$/i.exec(change.headline)?.[1];
+      if (stars !== undefined && change.headline.toLowerCase().includes("review")) {
+        return Number(stars) <= 2 ? { verdict: "red", alertKind: "own_review" } : null;
+      }
+      if (change.tone === "red" && change.headline.includes("rating")) {
+        return { verdict: "red", alertKind: "own_rating" };
+      }
+      return null;
+    }
+    case "price": {
+      // Only a parseable single-price move is classifiable: cuts ≥ 10%
+      // interrupt (red — direct price pressure), raises ≥ 10% interrupt
+      // (amber — a window to hold your price or capture switchers).
+      if (!change.detail.includes("→")) return null;
+      const pct = pricePctFromDetail(change.detail);
+      if (pct === null) return null;
+      if (pct <= -ALERT_PRICE_PCT) return { verdict: "red", alertKind: "price_cut" };
+      if (pct >= ALERT_PRICE_PCT) return { verdict: "amber", alertKind: "general" };
+      return null;
+    }
+    case "new_entry":
+      return { verdict: "amber", alertKind: "new_entrant" };
+    case "hours": {
+      // The diff detail carries only the new hours ("Now: ..."), not the
+      // previous string, so a day-set materiality test isn't possible from
+      // the change alone. Hours edits are rare and the 7-day cooldown
+      // suppresses repeats, so every hours change alerts as amber.
+      return { verdict: "amber", alertKind: "hours_change" };
+    }
+    case "reviews": {
+      // Competitor bleeding: a rating fall of ALERT_RATING_DROP or more
+      // inside one scan gap is a poach window. Rises, small drifts, count
+      // changes and new review quotes stay in the brief.
+      if (!change.headline.includes("rating")) return null;
+      const delta = ratingDeltaFromDetail(change.detail);
+      if (delta === null || delta >= 0) return null;
+      return delta <= -ALERT_RATING_DROP ? { verdict: "amber", alertKind: "competitor_rating" } : null;
+    }
+    default:
+      return null;
+  }
+}
 
 export type BriefSignal = {
   tone: ChangeTone;

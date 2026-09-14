@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   changesToBriefSignals,
+  classifyAlert,
   detectChanges,
   parseDetectedChanges,
   parsePrice,
@@ -343,5 +344,96 @@ describe("parseResearchSnapshot — own listing round-trip", () => {
     ]);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]?.kind).toBe("own_listing");
+  });
+});
+
+describe("classifyAlert — instant-alert significance filter", () => {
+  function listing(overrides: Partial<NonNullable<ResearchSnapshot["ownListing"]>> = {}) {
+    return { name: "Radiance Salon", ...overrides };
+  }
+
+  function ownSnapshot(
+    own?: NonNullable<ResearchSnapshot["ownListing"]>,
+    capturedAt = "2026-09-01T08:00:00.000Z",
+  ): ResearchSnapshot {
+    return {
+      location: { displayName: "Shoreditch, London", latitude: 51.52, longitude: -0.08 },
+      competitors: [glow()],
+      ownListing: own,
+      sources: [{ label: "Google Places", url: "https://maps.google.com/", kind: "reviews" }],
+      warnings: [],
+      capturedAt,
+    };
+  }
+
+  it("alerts red for a large competitor price cut", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ priceSamples: ["£36"] })])); // −20%
+    const classified = changes.map(classifyAlert);
+    expect(classified).toContainEqual({ verdict: "red", alertKind: "price_cut" });
+  });
+
+  it("stays weekly-only for a small price move under the 10% bar", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ priceSamples: ["£43"] })])); // −4.4%
+    expect(changes.map(classifyAlert)).toContainEqual(null);
+  });
+
+  it("alerts amber for a large competitor price raise", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ priceSamples: ["£55"] })])); // +22%
+    const classified = changes.map(classifyAlert);
+    expect(classified).toContainEqual({ verdict: "amber", alertKind: "general" });
+  });
+
+  it("alerts amber when a new competitor appears", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow(), glow({ name: "New Cut", distanceMeters: 250 })]));
+    expect(changes.map(classifyAlert)).toContainEqual({ verdict: "amber", alertKind: "new_entrant" });
+  });
+
+  it("alerts amber when a competitor's rating falls sharply", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ rating: 3.9 })])); // −0.6
+    expect(changes.map(classifyAlert)).toContainEqual({ verdict: "amber", alertKind: "competitor_rating" });
+  });
+
+  it("stays weekly-only for a small competitor rating drift", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ rating: 4.4 })])); // −0.1
+    expect(changes.map(classifyAlert)).toContainEqual(null);
+  });
+
+  it("alerts red for a new low review on the own listing", () => {
+    const changes = detectChanges(
+      ownSnapshot(listing({ reviews: [{ rating: 5, text: "Great." }] })),
+      ownSnapshot(listing({ reviews: [{ rating: 5, text: "Great." }, { rating: 1, text: "Awful service, won't return." }] })),
+    );
+    expect(changes.map(classifyAlert)).toContainEqual({ verdict: "red", alertKind: "own_review" });
+  });
+
+  it("keeps a 5-star review out of the alert channel (Monday's job)", () => {
+    const changes = detectChanges(
+      ownSnapshot(listing({ reviews: [{ rating: 5, text: "Great." }] })),
+      ownSnapshot(listing({ reviews: [{ rating: 5, text: "Great." }, { rating: 5, text: "Best cut of my life." }] })),
+    );
+    expect(changes.map(classifyAlert)).toContainEqual(null);
+  });
+
+  it("alerts red for a fall in the own rating", () => {
+    const changes = detectChanges(
+      ownSnapshot(listing({ rating: 4.8 })),
+      ownSnapshot(listing({ rating: 4.6 })),
+    );
+    expect(changes.map(classifyAlert)).toContainEqual({ verdict: "red", alertKind: "own_rating" });
+  });
+
+  it("alerts amber for a competitor hours change", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ openingHours: "Mon–Sat 9am–6pm" })]));
+    expect(changes.map(classifyAlert)).toContainEqual({ verdict: "amber", alertKind: "hours_change" });
+  });
+
+  it("stays weekly-only for review-count churn", () => {
+    const changes = detectChanges(snapshot([glow()]), snapshot([glow({ reviewCount: 121 })]));
+    expect(changes.map(classifyAlert)).toContainEqual(null);
+  });
+
+  it("returns no alert on the baseline run", () => {
+    const changes = detectChanges(null, snapshot([glow()]));
+    expect(changes.map(classifyAlert)).toEqual([]);
   });
 });

@@ -1,0 +1,44 @@
+# Daily instant-alert scheduler (Advise tier).
+#
+# Every day 06:00 UTC this POSTs to the production alerts cron, which runs a
+# light research sweep per Advise/Expand business (Google places search +
+# OSM), diffs against the previous snapshot, classifies big moves through
+# classifyAlert(), and emails at most ONE alert per user per day — the
+# highest-severity one. Everything else cools down or folds into Monday's
+# weekly brief. Full multi-source depth stays with the weekly mail by design.
+#
+# Required repo secret: LOVABLE_CRON_SECRET (same value as the Lovable secret).
+# Notes:
+# - Scheduled workflows only run on the default branch (main) — keep this file there.
+# - GitHub disables schedules after ~60 days with no commits to the repo;
+#   any push resets the clock (worth knowing for a quiet product).
+
+name: Daily market alerts
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # every day 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL to hit (defaults to production)"
+        required: false
+        default: "https://thebizscope.com"
+      force:
+        description: "Include non-Advise tiers (testing only)"
+        required: false
+        default: "false"
+
+jobs:
+  run-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger alerts cron
+        run: |
+          BASE="${{ inputs.url || 'https://thebizscope.com' }}"
+          FORCE=""
+          if [ "${{ inputs.force }}" = "true" ]; then FORCE="?force=1"; fi
+          curl -sS --fail-with-body -X POST "${BASE}/api/cron/run-alerts${FORCE}" \
+            -H "Authorization: Bearer ${{ secrets.LOVABLE_CRON_SECRET }}" \
+            --max-time 600 \
+            -H "content-type: application/json"
