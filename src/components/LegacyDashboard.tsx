@@ -8,24 +8,17 @@ import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { AnimatedNavFramer, type AnimatedNavItem } from "@/components/ui/animated-nav-framer";
 import { UpgradeOverlay } from "@/components/UpgradeOverlay";
 import {
-  claimWaitlistProfile,
-  createBusiness,
-  deleteBusiness,
-  getBillingStatus,
-  listBusinesses,
   getMonitoringStatus,
   getSchemaStatus,
   generateMonitoringBrief,
   listBriefs,
-  saveBusiness,
-  PLAN_BUSINESS_LIMITS,
-  type BillingStatus,
   type BriefRecord,
   type Business,
   type BusinessType,
   type MonitoringStatus,
   type Profile,
 } from "@/lib/account.functions";
+import { useBusinessManager } from "@/lib/use-business-manager";
 import type { Brief } from "@/lib/brief.functions";
 import type { DetectedChange } from "@/lib/change-detection";
 
@@ -67,23 +60,30 @@ const EMPTY_STATUS: MonitoringStatus = {
 
 export function LegacyDashboard() {
   const router = useRouter();
-  const fetchBusinesses = useServerFn(listBusinesses);
-  const persistBusiness = useServerFn(saveBusiness);
-  const addBusiness = useServerFn(createBusiness);
-  const deleteBusinessFn = useServerFn(deleteBusiness);
-  const claimProfile = useServerFn(claimWaitlistProfile);
-  const fetchBilling = useServerFn(getBillingStatus);
+  // Business data + mutations live in the shared manager (same instance of
+  // the logic the globe dashboard uses) — this component only renders.
+  const bm = useBusinessManager({ auto: false });
+  const {
+    businesses,
+    activeId,
+    activeBusiness,
+    billing,
+    tierGate,
+    confirmDelete,
+    armDelete,
+    disarmDelete,
+    add: addBusinessTo,
+    save: saveBusinessTo,
+    remove: removeBusiness,
+    select: selectBusinessId,
+    load: loadBusinesses,
+  } = bm;
   const runMonitoring = useServerFn(generateMonitoringBrief);
   const fetchBriefs = useServerFn(listBriefs);
   const fetchStatus = useServerFn(getMonitoringStatus);
   const checkSchema = useServerFn(getSchemaStatus);
 
   const [view, setView] = useState<ViewState>("checking");
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  // Billing state for the + button's tier gate (how many businesses may be
-  // added before the plans screen takes over).
-  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [screen, setScreen] = useState<Screen>("business");
   const [tab, setTab] = useState<BusinessTab>("monitoring");
   const [tabDir, setTabDir] = useState<"left" | "right" | null>(null);
@@ -96,9 +96,8 @@ export function LegacyDashboard() {
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
   const [addError, setAddError] = useState("");
-  // Delete flow (Details tab): two-step confirm so a stray click can't erase
-  // a business together with its scan history and briefs.
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Delete-in-flight state (the two-step confirm machine lives in the shared
+  // manager; only the request status is local).
   const [deleteState, setDeleteState] = useState<"idle" | "deleting">("idle");
   const [deleteError, setDeleteError] = useState("");
   const [missingTables, setMissingTables] = useState<string[]>([]);
@@ -126,14 +125,18 @@ export function LegacyDashboard() {
     try {
       // Schema probe first: if the setup migrations haven't been applied, show
       // a setup screen instead of letting save/scan fail with generic errors.
-      const [schema, { businesses: owned }] = await Promise.all([
-        checkSchema(),
-        fetchBusinesses(),
-      ]);
-      // Status/briefs are per-business now — they need the active business
-      // id, so they load after the selection is known.
-      const preload = owned[0] ?? null;
-      const activeId0 = preload?.id ?? null;
+      const schema = await checkSchema();
+      if (!schema.ok) {
+        setMissingTables(schema.missingTables);
+        setView("setup");
+        return;
+      }
+      setMissingTables([]);
+
+      // Shared manager loads businesses (with waitlist claim) + billing.
+      const { businesses: resolved, billing: billingStatus } = await loadBusinesses();
+      // Status/briefs are per-business — they load once the selection is known.
+      const activeId0 = resolved[0]?.id ?? null;
       const [{ briefs: stored }, { status: monitoring }] = await Promise.all(
         activeId0
           ? [
@@ -142,27 +145,8 @@ export function LegacyDashboard() {
             ]
           : [Promise.resolve({ briefs: [] }), Promise.resolve({ status: EMPTY_STATUS })],
       );
-      if (!schema.ok) {
-        setMissingTables(schema.missingTables);
-        setView("setup");
-        return;
-      }
-      setMissingTables([]);
-      let resolved = owned;
-      // No business yet — if this email is on the waitlist, claim it and
-      // prefill a business so the dashboard starts populated.
-      if (resolved.length === 0) {
-        const claimed = await claimProfile();
-        if (claimed.profile) {
-          // The claim seeds a real businesses row — read it back for the id.
-          const reread = await fetchBusinesses();
-          resolved = reread.businesses;
-        }
-      }
-      setBusinesses(resolved);
       const first = resolved[0];
       if (first) {
-        setActiveId(first.id);
         setDraft({
           businessName: first.businessName,
           businessType: first.businessType,
@@ -172,7 +156,6 @@ export function LegacyDashboard() {
         setScreen("business");
         setTab("monitoring");
       } else {
-        setActiveId(null);
         setScreen("add");
       }
       setBriefs(stored);
@@ -180,24 +163,17 @@ export function LegacyDashboard() {
       setView("ready");
       // No paid subscription — open the plans overlay once, after the screen
       // has settled. Dismissible; the dashboard stays fully usable.
-      try {
-        const { status: billingStatus } = await fetchBilling();
-        setBillingStatus(billingStatus);
-        if (!billingStatus.accessGranted) setPricingOpen(true);
-      } catch {
-        // Billing check unavailable — never block the dashboard for it.
-      }
+      if (billingStatus && !billingStatus.accessGranted) setPricingOpen(true);
     } catch {
       // Token missing/expired — treat as signed out so the user can log in again.
       setView("signedOut");
     }
-  }, [checkSchema, fetchBusinesses, fetchBriefs, fetchStatus, claimProfile, fetchBilling]);
+  }, [checkSchema, loadBusinesses, fetchBriefs, fetchStatus]);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
-  const activeBusiness = businesses.find((b) => b.id === activeId) ?? null;
   const railItemClass = (active: boolean) =>
     "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-sm px-3.5 py-2.5 text-sm font-medium transition-colors " +
     (active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground");
@@ -214,7 +190,7 @@ export function LegacyDashboard() {
   }
 
   function selectBusiness(business: Business) {
-    setActiveId(business.id);
+    selectBusinessId(business.id);
     setDraft({
       businessName: business.businessName,
       businessType: business.businessType,
@@ -226,22 +202,17 @@ export function LegacyDashboard() {
     setTabDir(null);
     setSavedFlash(false);
     setSavedError("");
-    setConfirmDelete(false); // confirmations never carry across businesses
     setDeleteError("");
   }
 
-  // Tier cap (server-enforced too): free = 0 new, Watch = 1, Advise = 5.
-  // With room left this opens the add form; at the cap it points at plans.
+  // Tier cap (shared with the globe dashboard + server-enforced): free = 0
+  // new, Watch = 1, Advise = 5. With room left this opens the add form; at
+  // the cap it points at plans.
   function onAddClick() {
-    const tier = billingStatus?.planTier ?? "free";
-    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier]) {
-      // At the tier cap (including free = 0) — plans overlay, not a form that
-      // would only fail server-side.
+    if (!tierGate.canAddMore) {
       setPricingOpen(true);
       return;
     }
-    // Room under the cap — open the add form (this is also the empty-account
-    // path, and the multi-business path on Watch/Advise).
     setDraft({ businessName: "", businessType: "salon", location: "", pricePoint: "" });
     setAddError("");
     setScreen("add");
@@ -251,14 +222,12 @@ export function LegacyDashboard() {
     e.preventDefault();
     setAddError("");
     try {
-      const { business } = await addBusiness({ data: draft });
-      setBusinesses((prev) => [...prev, business]); // multi-business: append
-      setActiveId(business.id);
+      const created = await addBusinessTo(draft);
       setDraft({
-        businessName: business.businessName,
-        businessType: business.businessType,
-        location: business.location,
-        pricePoint: business.pricePoint ?? "",
+        businessName: created.businessName,
+        businessType: created.businessType,
+        location: created.location,
+        pricePoint: created.pricePoint ?? "",
       });
       setScreen("business");
       setTab("monitoring");
@@ -275,14 +244,10 @@ export function LegacyDashboard() {
     setDeleteState("deleting");
     setDeleteError("");
     try {
-      await deleteBusinessFn({ data: activeId });
-      const remaining = businesses.filter((b) => b.id !== activeId);
-      setBusinesses(remaining);
-      setConfirmDelete(false);
+      const remaining = await removeBusiness(activeId);
       setDeleteState("idle");
       const next = remaining[0];
       if (next) {
-        setActiveId(next.id);
         setDraft({
           businessName: next.businessName,
           businessType: next.businessType,
@@ -291,10 +256,8 @@ export function LegacyDashboard() {
         });
         setScreen("business");
       } else {
-        setActiveId(null);
         // None left: the add form when the tier allows it, plans otherwise.
-        const tier = billingStatus?.planTier ?? "free";
-        if (PLAN_BUSINESS_LIMITS[tier] > 0) {
+        if (tierGate.limit > 0) {
           setDraft({ businessName: "", businessType: "salon", location: "", pricePoint: "" });
           setScreen("add");
         } else {
@@ -314,20 +277,8 @@ export function LegacyDashboard() {
     setSavedFlash(false);
     setSavedError("");
     try {
-      await persistBusiness({ data: { ...draft, businessId: activeId! } });
-      setBusinesses((prev) =>
-        prev.map((b) =>
-          b.id === activeId
-            ? {
-                ...b,
-                businessName: draft.businessName,
-                businessType: draft.businessType,
-                location: draft.location,
-                pricePoint: draft.pricePoint ?? "",
-              }
-            : b,
-        ),
-      );
+      if (!activeId) return;
+      await saveBusinessTo(activeId, draft);
       setSavedFlash(true);
     } catch (err) {
       const message =
@@ -718,7 +669,7 @@ export function LegacyDashboard() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setConfirmDelete(false)}
+                          onClick={disarmDelete}
                           className="rounded-sm border border-rule px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
                         >
                           Keep
@@ -727,7 +678,7 @@ export function LegacyDashboard() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setConfirmDelete(true)}
+                        onClick={armDelete}
                         className="mt-3 w-full rounded-sm border border-signal-red/40 px-3 py-2 text-xs font-medium text-signal-red transition-colors hover:bg-signal-red/10"
                       >
                         Delete this business

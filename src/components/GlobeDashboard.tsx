@@ -10,23 +10,16 @@ import { AnimatedNavFramer, type AnimatedNavItem } from "@/components/ui/animate
 import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { UpgradeOverlay } from "@/components/UpgradeOverlay";
 import {
-  claimWaitlistProfile,
-  createBusiness,
   generateMonitoringBrief,
-  getBillingStatus,
   getMonitoringStatus,
   listBriefs,
-  listBusinesses,
-  saveBusiness,
-  deleteBusiness,
-  PLAN_BUSINESS_LIMITS,
-  type BillingStatus,
   type BriefRecord,
   type Business,
   type BusinessType,
   type MonitoringStatus,
   type Profile,
 } from "@/lib/account.functions";
+import { useBusinessManager } from "@/lib/use-business-manager";
 import type { Brief } from "@/lib/brief.functions";
 import type { DetectedChange } from "@/lib/change-detection";
 import { cn } from "@/lib/utils";
@@ -63,12 +56,24 @@ const TONE_DOT: Record<DetectedChange["tone"], string> = {
 
 export function GlobeDashboard() {
   const router = useRouter();
-  const addBusiness = useServerFn(createBusiness);
-  const fetchBusinesses = useServerFn(listBusinesses);
-  const claimProfile = useServerFn(claimWaitlistProfile);
-  const fetchBilling = useServerFn(getBillingStatus);
-  const persistBusiness = useServerFn(saveBusiness);
-  const deleteBusinessFn = useServerFn(deleteBusiness);
+  // Business data + mutations live in the shared manager (same instance of
+  // the logic the legacy dashboard uses) — this component only renders.
+  const bm = useBusinessManager({ auto: false });
+  const {
+    businesses,
+    activeId,
+    activeBusiness,
+    tierGate,
+    confirmDelete,
+    armDelete,
+    disarmDelete,
+    add: addBusinessTo,
+    save: saveBusinessTo,
+    remove: removeBusiness,
+    select: selectBusinessId,
+    load: loadBusinesses,
+    devSet: setBusinesses, // dev/testing escape hatch (the __devBusiness aid below)
+  } = bm;
   const fetchStatus = useServerFn(getMonitoringStatus);
   const fetchBriefs = useServerFn(listBriefs);
   const runMonitoring = useServerFn(generateMonitoringBrief);
@@ -104,14 +109,11 @@ export function GlobeDashboard() {
   const [addError, setAddError] = useState("");
 
   // Plans / upgrade overlay — opened automatically for accounts without a
-  // paid subscription, from the + pill once the account has its one business,
-  // or from the nav pill's Plans item.
+  // paid subscription, from the + pill at the tier cap, or from the nav
+  // pill's Plans item.
   const [pricingOpen, setPricingOpen] = useState(false);
   // Why the overlay is up — the title adapts (choosing a plan vs. limit hit).
   const [pricingReason, setPricingReason] = useState<"choose" | "limit">("limit");
-  // Billing state drives the + pill's tier gate (how many businesses this
-  // account may add before the plans overlay takes over).
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
 
   // The "run a scan" callout box: wanted after a business is added or when the
   // amber mark is clicked. While it is open the globe holds still; dismissing
@@ -122,11 +124,6 @@ export function GlobeDashboard() {
     scanOpenRef.current = scanOpen;
   }, [scanOpen]);
 
-  // Businesses synced from the shared profiles table (what the old dashboard
-  // writes). Empty until the check finishes — the globe only mounts once this
-  // settles, so it starts in the right state (mark present or pristine).
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
   // Expanded run-a-scan panel: Details / Monitoring / Run scan. While
@@ -143,9 +140,8 @@ export function GlobeDashboard() {
   });
   const [savedFlash, setSavedFlash] = useState(false);
   const [savedError, setSavedError] = useState("");
-  // Delete flow (Details tab): two-step confirm so a stray click can't erase
-  // a business together with its scan history and briefs.
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Delete-in-flight state (the two-step confirm machine lives in the shared
+  // manager; only the request status is local).
   const [deleteState, setDeleteState] = useState<"idle" | "deleting">("idle");
   const [deleteError, setDeleteError] = useState("");
 
@@ -165,50 +161,28 @@ export function GlobeDashboard() {
         return;
       }
       try {
-        const { businesses } = await fetchBusinesses();
-        let resolved = businesses;
-        // No business yet — if this email signed up for the waitlist, claim it
-        // and prefill, exactly like the old dashboard does.
-        if (resolved.length === 0) {
-          const claimed = await claimProfile();
-          if (claimed.profile) {
-            // The claim seeds a real businesses row — read it back so the id
-            // is the business id (scans and history key on it, not the user id).
-            const reread = await fetchBusinesses();
-            resolved = reread.businesses;
-          }
-        }
-        if (cancelled) return;
-        setBusinesses(resolved);
-        const first = resolved[0];
-        if (first) {
-          setActiveId(first.id);
-          setScanOpen(true); // mark + box up immediately
-        }
-        // No paid subscription (free account, or a lapsed one) — surface the
-        // plans straight away, same overlay as the add-business limit. The
-        // user can dismiss it and still use everything their tier allows.
-        try {
-          const { status: billingStatus } = await fetchBilling();
-          if (cancelled) return;
-          setBilling(billingStatus);
-          if (!billingStatus.accessGranted) {
-            setPricingReason("choose");
-            setPricingOpen(true);
-          }
-        } catch {
-          // Billing check unavailable — never block the dashboard for it.
-        }
-      } catch {
-        // Signed-out, expired, or schema not ready — leave the globe pristine.
-      } finally {
-        if (!cancelled) setAuthChecked(true);
+      const { businesses: resolved, billing: billingStatus } = await loadBusinesses();
+      if (cancelled) return;
+      if (resolved[0]) {
+        setScanOpen(true); // mark + box up immediately
       }
-    })();
+      // No paid subscription (free account, or a lapsed one) — surface the
+      // plans straight away, same overlay as the add-business limit. The
+      // user can dismiss it and still use everything their tier allows.
+      if (!billingStatus?.accessGranted) {
+        setPricingReason("choose");
+        setPricingOpen(true);
+      }
+    } catch {
+      // Signed-out, expired, or schema not ready — leave the globe pristine.
+    } finally {
+      if (!cancelled) setAuthChecked(true);
+    }
+  })();
     return () => {
       cancelled = true;
     };
-  }, [fetchBusinesses, claimProfile, fetchBilling]);
+  }, [loadBusinesses]);
 
   // Outside-click dismissal: only while the box is actually up (the reveal
   // sweep may still be playing, or the mark may be behind the sphere).
@@ -263,15 +237,17 @@ export function GlobeDashboard() {
     // Dev aid: simulate a synced business so the mark flow can be exercised
     // locally without auth (never reachable from the UI).
     w["__devBusiness"] = () => {
-      setBusinesses([
-        {
-          id: "dev-business",
-          businessName: "Test Salon",
-          businessType: "salon",
-          location: "Shoreditch, London",
-        },
-      ]);
-      setActiveId("dev-business");
+      setBusinesses(
+        [
+          {
+            id: "dev-business",
+            businessName: "Test Salon",
+            businessType: "salon" as const,
+            location: "Shoreditch, London",
+          },
+        ],
+        "dev-business",
+      );
     };
     return () => {
       clearInterval(id);
@@ -286,7 +262,6 @@ export function GlobeDashboard() {
   // wanted AND the mark is on the visible front of the sphere; the box is
   // interactive (data-open="1") exactly when it is shown, so a click outside
   // dismisses it while the globe is holding still under it.
-  const activeBusiness = businesses.find((b) => b.id === activeId) ?? businesses[0] ?? null;
   const changeCount = latestChanges.length > 0 ? latestChanges.length : status.changes.length;
 
   // Each business gets its own longitude on the globe: the first sits dead
@@ -329,14 +304,14 @@ export function GlobeDashboard() {
       location: activeBusiness.location,
       pricePoint: activeBusiness.pricePoint ?? "",
     });
-    setConfirmDelete(false);
+    disarmDelete();
     setDeleteError("");
-  }, [activeBusiness?.id]);
+  }, [activeBusiness?.id, disarmDelete]);
 
   // Selecting a business from the nav dropdown: the globe rotates to bring its
   // mark to the front, and the run-a-scan box opens once it arrives.
   function selectBusiness(business: Business) {
-    setActiveId(business.id);
+    selectBusinessId(business.id);
     setScanOpen(true);
     setExpanded(false);
     focusTriggerRef.current += 1;
@@ -402,10 +377,9 @@ export function GlobeDashboard() {
   }
 
   function openAdd() {
-    // Tier cap, server-enforced too: free = 0 new, Watch = 1, Advise = 5,
-    // Expand = unlimited. At the cap the + pill becomes the plans overlay.
-    const tier = billing?.planTier ?? "free";
-    if (businesses.length >= PLAN_BUSINESS_LIMITS[tier]) {
+    // Tier cap (shared with legacy + server-enforced): at the cap the + pill
+    // becomes the plans overlay; otherwise the add form opens.
+    if (!tierGate.canAddMore) {
       setPricingReason("limit");
       openPricing();
       return;
@@ -434,9 +408,7 @@ export function GlobeDashboard() {
     setAddState("saving");
     setAddError("");
     try {
-      const { business: created } = await addBusiness({ data: draft });
-      setBusinesses((prev) => [...prev, created]); // multi-business: append
-      setActiveId(created.id);
+      await addBusinessTo(draft);
       // First business created — close the panel and let the globe play its
       // reveal: one fast full turn, the type fades to a plain dotted field,
       // and the mark pops onto the front.
@@ -457,15 +429,11 @@ export function GlobeDashboard() {
     setDeleteState("deleting");
     setDeleteError("");
     try {
-      await deleteBusinessFn({ data: activeBusiness.id });
-      const remaining = businesses.filter((b) => b.id !== activeBusiness.id);
-      setBusinesses(remaining);
-      setConfirmDelete(false);
+      const remaining = await removeBusiness(activeBusiness.id);
       setDeleteState("idle");
-      if (remaining.length > 0 && remaining[0]) {
-        setActiveId(remaining[0].id); // next business takes the mark
+      if (remaining.length > 0) {
+        // next business takes the mark (remove() already re-selected it)
       } else {
-        setActiveId(null);
         closeScan(); // none left — back to the pristine globe, + pill returns
       }
     } catch (err) {
@@ -500,10 +468,7 @@ export function GlobeDashboard() {
     setSavedError("");
     try {
       if (!activeBusiness) return;
-      await persistBusiness({ data: { ...detailDraft, businessId: activeBusiness.id } });
-      setBusinesses((prev) =>
-        prev.map((b) => (b.id === activeBusiness.id ? { ...b, ...detailDraft } : b)),
-      );
+      await saveBusinessTo(activeBusiness.id, detailDraft);
       setSavedFlash(true);
     } catch (err) {
       const message =
@@ -792,7 +757,7 @@ export function GlobeDashboard() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setConfirmDelete(false)}
+                          onClick={disarmDelete}
                           className="rounded-sm border border-rule px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
                         >
                           Keep
@@ -801,7 +766,7 @@ export function GlobeDashboard() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setConfirmDelete(true)}
+                        onClick={armDelete}
                         className="mt-3 w-full rounded-sm border border-signal-red/40 px-3 py-2 text-xs font-medium text-signal-red transition-colors hover:bg-signal-red/10"
                       >
                         Delete this business
