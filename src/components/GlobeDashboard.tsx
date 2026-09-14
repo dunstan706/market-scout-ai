@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { BriefCard, type Signal } from "@/components/BriefCard";
 import { MarketSnapshot } from "@/components/MarketSnapshot";
+import { AlertStrip, unacknowledgedAlertCount } from "@/components/AlertStrip";
 import { GlobeScene, type GlobeMark, type GlobeState } from "@/components/GlobeScene";
 import { AnimatedNavFramer, type AnimatedNavItem } from "@/components/ui/animated-nav-framer";
 import { ConstellationGrid } from "@/components/ConstellationGrid";
@@ -20,6 +21,7 @@ import {
   type Profile,
 } from "@/lib/account.functions";
 import { useBusinessManager } from "@/lib/use-business-manager";
+import { listMarketAlerts, type MarketAlertRow } from "@/lib/alert.functions";
 import type { Brief } from "@/lib/brief.functions";
 import type { DetectedChange } from "@/lib/change-detection";
 import { cn } from "@/lib/utils";
@@ -75,6 +77,7 @@ export function GlobeDashboard() {
     devSet: setBusinesses, // dev/testing escape hatch (the __devBusiness aid below)
   } = bm;
   const fetchStatus = useServerFn(getMonitoringStatus);
+  const fetchAlerts = useServerFn(listMarketAlerts);
   const fetchBriefs = useServerFn(listBriefs);
   const runMonitoring = useServerFn(generateMonitoringBrief);
   // Shared, live globe state: GlobeScene writes its center + limb radius here
@@ -147,6 +150,7 @@ export function GlobeDashboard() {
 
   const [status, setStatus] = useState<MonitoringStatus>(EMPTY_STATUS);
   const [briefs, setBriefs] = useState<BriefRecord[]>([]);
+  const [alerts, setAlerts] = useState<MarketAlertRow[]>([]);
   const [latest, setLatest] = useState<Brief | null>(null);
   const [latestChanges, setLatestChanges] = useState<DetectedChange[]>([]);
   const [genState, setGenState] = useState<GenState>("idle");
@@ -278,13 +282,15 @@ export function GlobeDashboard() {
     let cancelled = false;
     void (async () => {
       try {
-        const [{ status: monitoring }, { briefs: stored }] = await Promise.all([
+        const [{ status: monitoring }, { briefs: stored }, { alerts: fetchedAlerts }] = await Promise.all([
           fetchStatus({ data: { businessId: activeId } }),
           fetchBriefs({ data: { businessId: activeId } }),
+          fetchAlerts({ data: { unacknowledgedOnly: false, limit: 10 } }),
         ]);
         if (cancelled) return;
         setStatus(monitoring);
         setBriefs(stored);
+        setAlerts(fetchedAlerts);
       } catch {
         // Signed out or schema not ready — the tabs render their empty states.
       }
@@ -292,7 +298,7 @@ export function GlobeDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [expanded, activeId, fetchStatus, fetchBriefs]);
+  }, [expanded, activeId, fetchStatus, fetchBriefs, fetchAlerts]);
 
   // Seed the details form whenever the active business changes (and disarm
   // any armed delete — confirmations never carry across businesses).
@@ -499,12 +505,14 @@ export function GlobeDashboard() {
       setLatest(res.brief);
       setLatestChanges(res.changes);
       setGenState("done");
-      const [{ status: monitoring }, { briefs: stored }] = await Promise.all([
+      const [{ status: monitoring }, { briefs: stored }, { alerts: fetchedAlerts }] = await Promise.all([
         fetchStatus({ data: { businessId: activeBusiness.id } }),
         fetchBriefs({ data: { businessId: activeBusiness.id } }),
+        fetchAlerts({ data: { unacknowledgedOnly: false, limit: 10 } }),
       ]);
       setStatus(monitoring);
       setBriefs(stored);
+      setAlerts(fetchedAlerts);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setGenState("error");
@@ -645,9 +653,9 @@ export function GlobeDashboard() {
                     )}
                   >
                     {tab.label}
-                    {tab.id === "monitoring" && changeCount > 0 && (
+                    {tab.id === "monitoring" && changeCount + unacknowledgedAlertCount(alerts) > 0 && (
                       <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-signal-red px-1 text-[10px] font-semibold leading-none text-white">
-                        {changeCount}
+                        {changeCount + unacknowledgedAlertCount(alerts)}
                       </span>
                     )}
                   </button>
@@ -780,6 +788,15 @@ export function GlobeDashboard() {
               {scanTab === "monitoring" && (
                 <div className="space-y-4 p-4">
                   <p className="eyebrow">Monitoring</p>
+                  <AlertStrip
+                    alerts={alerts}
+                    framed
+                    onChanged={() => {
+                      void fetchAlerts({ data: { unacknowledgedOnly: false, limit: 10 } })
+                        .then((result) => setAlerts(result.alerts))
+                        .catch(() => {});
+                    }}
+                  />
                   {status.analysis && (
                     <div className="rounded-md border border-rule/70 bg-card/40 p-3.5">
                       <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">

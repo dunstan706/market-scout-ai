@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { BriefCard, type Signal } from "@/components/BriefCard";
+import { AlertStrip, unacknowledgedAlertCount } from "@/components/AlertStrip";
 import { MarketSnapshot } from "@/components/MarketSnapshot";
 import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { AnimatedNavFramer, type AnimatedNavItem } from "@/components/ui/animated-nav-framer";
@@ -19,6 +20,7 @@ import {
   type Profile,
 } from "@/lib/account.functions";
 import { useBusinessManager } from "@/lib/use-business-manager";
+import { listMarketAlerts, type MarketAlertRow } from "@/lib/alert.functions";
 import type { Brief } from "@/lib/brief.functions";
 import type { DetectedChange } from "@/lib/change-detection";
 
@@ -81,6 +83,7 @@ export function LegacyDashboard() {
   const runMonitoring = useServerFn(generateMonitoringBrief);
   const fetchBriefs = useServerFn(listBriefs);
   const fetchStatus = useServerFn(getMonitoringStatus);
+  const fetchAlerts = useServerFn(listMarketAlerts);
   const checkSchema = useServerFn(getSchemaStatus);
 
   const [view, setView] = useState<ViewState>("checking");
@@ -104,6 +107,7 @@ export function LegacyDashboard() {
 
   const [status, setStatus] = useState<MonitoringStatus>(EMPTY_STATUS);
   const [briefs, setBriefs] = useState<BriefRecord[]>([]);
+  const [alerts, setAlerts] = useState<MarketAlertRow[]>([]);
   const [latest, setLatest] = useState<Brief | null>(null);
   const [latestChanges, setLatestChanges] = useState<DetectedChange[]>([]);
   const [genState, setGenState] = useState<GenState>("idle");
@@ -137,14 +141,16 @@ export function LegacyDashboard() {
       const { businesses: resolved, billing: billingStatus } = await loadBusinesses();
       // Status/briefs are per-business — they load once the selection is known.
       const activeId0 = resolved[0]?.id ?? null;
-      const [{ briefs: stored }, { status: monitoring }] = await Promise.all(
-        activeId0
-          ? [
-              fetchBriefs({ data: { businessId: activeId0 } }),
-              fetchStatus({ data: { businessId: activeId0 } }),
-            ]
-          : [Promise.resolve({ briefs: [] }), Promise.resolve({ status: EMPTY_STATUS })],
-      );
+      const briefsP = activeId0 ? fetchBriefs({ data: { businessId: activeId0 } }) : Promise.resolve({ briefs: [] as BriefRecord[] });
+      const statusP = activeId0 ? fetchStatus({ data: { businessId: activeId0 } }) : Promise.resolve({ status: EMPTY_STATUS });
+      const alertsP = activeId0
+        ? fetchAlerts({ data: { unacknowledgedOnly: false, limit: 10 } })
+        : Promise.resolve({ alerts: [] as MarketAlertRow[] });
+      const [{ briefs: stored }, { status: monitoring }, { alerts: fetchedAlerts }] = await Promise.all([
+        briefsP,
+        statusP,
+        alertsP,
+      ]);
       const first = resolved[0];
       if (first) {
         setDraft({
@@ -160,6 +166,7 @@ export function LegacyDashboard() {
       }
       setBriefs(stored);
       setStatus(monitoring);
+      setAlerts(fetchedAlerts);
       setView("ready");
       // No paid subscription — open the plans overlay once, after the screen
       // has settled. Dismissible; the dashboard stays fully usable.
@@ -168,7 +175,7 @@ export function LegacyDashboard() {
       // Token missing/expired — treat as signed out so the user can log in again.
       setView("signedOut");
     }
-  }, [checkSchema, loadBusinesses, fetchBriefs, fetchStatus]);
+  }, [checkSchema, loadBusinesses, fetchBriefs, fetchStatus, fetchAlerts]);
 
   useEffect(() => {
     void loadDashboard();
@@ -307,12 +314,14 @@ export function LegacyDashboard() {
       setLatest(res.brief);
       setLatestChanges(res.changes);
       setGenState("done");
-      const [{ briefs: refreshed }, { status: monitoring }] = await Promise.all([
+      const [{ briefs: refreshed }, { status: monitoring }, { alerts: fetchedAlerts }] = await Promise.all([
         fetchBriefs({ data: { businessId: activeBusiness.id } }),
         fetchStatus({ data: { businessId: activeBusiness.id } }),
+        fetchAlerts({ data: { unacknowledgedOnly: false, limit: 10 } }),
       ]);
       setBriefs(refreshed);
       setStatus(monitoring);
+      setAlerts(fetchedAlerts);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setGenState("error");
@@ -557,9 +566,9 @@ export function LegacyDashboard() {
                         }
                       >
                         {item.label}
-                        {item.id === "monitoring" && changeCount > 0 && (
+                        {item.id === "monitoring" && changeCount + unacknowledgedAlertCount(alerts) > 0 && (
                           <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-signal-red px-1.5 text-[11px] font-semibold leading-none text-white">
-                            {changeCount}
+                            {changeCount + unacknowledgedAlertCount(alerts)}
                           </span>
                         )}
                       </button>
@@ -691,6 +700,15 @@ export function LegacyDashboard() {
 
               {tab === "monitoring" && (
                 <div className="space-y-6">
+                  <AlertStrip
+                    alerts={alerts}
+                    framed={false}
+                    onChanged={() => {
+                      void fetchAlerts({ data: { unacknowledgedOnly: false, limit: 10 } })
+                        .then((result) => setAlerts(result.alerts))
+                        .catch(() => {});
+                    }}
+                  />
                   {status.analysis && (
                     <section aria-label="Market snapshot" className="paper-card rounded-md p-6 md:p-7">
                       <p className="eyebrow">Market snapshot</p>
