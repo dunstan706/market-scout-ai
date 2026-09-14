@@ -87,6 +87,17 @@ function normalizePricePoint(value: string | null | undefined): string | null {
   return trimmed ? trimmed.slice(0, 40) : null;
 }
 
+// PostgREST reports a missing table as PGRST205 ("Could not find the table
+// in the schema cache") — the schema probe uses the same signature. When a
+// deploy ships code that reads a table the database doesn't have yet (a
+// migration not applied), this is the difference between an actionable
+// setup message and a mysterious generic failure.
+function isMissingTableError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST205") return true;
+  return /could not find the table/i.test(error.message ?? "");
+}
+
 type ProfileWriteRow = {
   id: string;
   business_name: string;
@@ -183,10 +194,11 @@ export const PLAN_BUSINESS_LIMITS: Record<PlanTier, number> = {
 const BusinessIdInput = z.string().uuid();
 
 async function countBusinesses(supabase: ContextSupabase, userId: string): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from("businesses")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId);
+  if (error) console.error("countBusinesses failed", error);
   return count ?? 0;
 }
 
@@ -280,6 +292,13 @@ export const createBusiness = createServerFn({ method: "POST" })
       .single();
     if (error || !created) {
       console.error("createBusiness failed", error);
+      if (isMissingTableError(error)) {
+        // Operator-facing setup hint, shown in production too: without it a
+        // missing migration looks like a generic, mysterious failure.
+        throw new Error(
+          "Setup incomplete — the businesses table is missing in the database. Run the latest Supabase migration (20260914090000_add_businesses_table.sql), then try again.",
+        );
+      }
       throw new Error(describeError("Could not add your business.", error?.message));
     }
     return { business: toBusiness(created) };
