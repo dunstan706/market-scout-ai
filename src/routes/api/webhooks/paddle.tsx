@@ -116,14 +116,17 @@ async function resolveProfileRow(
     );
     const email = customer?.email;
     if (email) {
-      const { data: authUsers } = await supabaseAdmin.from("users").select("id").eq("email", email).limit(1);
-      const userId = (authUsers as Array<{ id: string }> | null)?.[0]?.id;
-      if (userId) {        const { data } = await supabaseAdmin
+      // auth.users is not exposed to PostgREST — resolve via the GoTrue
+      // admin API (a PostgREST query on "users" silently returns nothing).
+      const { getAuthUserIdByEmail } = await import("@/integrations/supabase/auth-lookup.server");
+      const userId = await getAuthUserIdByEmail(email);
+      if (userId) {
+        const { data } = await supabaseAdmin
           .from("profiles")
           .select("id, paddle_customer_id, paddle_subscription_id, plan_tier")
           .eq("id", userId)
           .limit(1);
-      return (data as ProfileBillingRow[] | null)?.[0] ?? null;
+        return (data as ProfileBillingRow[] | null)?.[0] ?? null;
       }
     }
   }
@@ -147,12 +150,10 @@ async function applyCustomer(
     .limit(1);
   if ((existing as Array<{ id: string }> | null)?.length) return; // already attached
 
-  const { data: authUsers } = await supabaseAdmin
-    .from("users")
-    .select("id")
-    .eq("email", customer.email)
-    .limit(1);
-  const userId = (authUsers as Array<{ id: string }> | null)?.[0]?.id;
+  // auth.users is not exposed to PostgREST — resolve via the GoTrue admin
+  // API (a PostgREST query on "users" silently returns nothing).
+  const { getAuthUserIdByEmail } = await import("@/integrations/supabase/auth-lookup.server");
+  const userId = await getAuthUserIdByEmail(customer.email);
   if (!userId) return; // no account with that email yet — subscription events will attach it
 
   await supabaseAdmin.from("profiles").update({ paddle_customer_id: customer.id }).eq("id", userId);

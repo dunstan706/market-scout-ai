@@ -119,11 +119,9 @@ function toAffiliateProfile(row: AffiliateDbRow): AffiliateProfile {
   };
 }
 
-// auth.users isn't part of the generated public-schema types; reach it
-// through a string-typed client, the same way the Paddle webhook does.
-function looseClient(client: unknown): { from: (table: string) => any } {
-  return client as { from: (table: string) => any };
-}
+// auth.users isn't part of the generated public-schema types and isn't
+// exposed to PostgREST — lookups go through the GoTrue admin API helper.
+import { getAuthEmailById } from "@/integrations/supabase/auth-lookup.server";
 
 // --- Application ---
 
@@ -207,12 +205,7 @@ export const claimReferral = createServerFn({ method: "POST" })
     // Self-referral ban, enforced server-side: you cannot attribute yourself
     // (same account) or your own email.
     if (affiliateRow.user_id && affiliateRow.user_id === context.userId) return { claimed: false };
-    const { data: authUser } = await looseClient(supabaseAdmin)
-      .from("users")
-      .select("email")
-      .eq("id", context.userId)
-      .limit(1);
-    const userEmail = String((authUser as Array<{ email: string }> | null)?.[0]?.email ?? "").toLowerCase();
+    const userEmail = (await getAuthEmailById(context.userId)) ?? "";
     if (userEmail && userEmail === affiliateRow.email.toLowerCase()) {
       return { claimed: false };
     }
@@ -340,8 +333,7 @@ async function assertAdmin(userId: string): Promise<void> {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
   if (adminEmails.length === 0) throw new Error("Admin access is not configured.");
-  const { data } = await looseClient(supabaseAdmin).from("users").select("email").eq("id", userId).limit(1);
-  const email = String((data as Array<{ email: string }> | null)?.[0]?.email ?? "").toLowerCase();
+  const email = await getAuthEmailById(userId);
   if (!email || !adminEmails.includes(email)) throw new Error("Admin access required.");
 }
 
