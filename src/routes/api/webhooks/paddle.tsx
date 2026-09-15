@@ -59,12 +59,6 @@ type ProfileBillingRow = {
   plan_tier?: string | null;
 };
 
-type PaddleCustomer = {
-  id?: string;
-  email?: string;
-  name?: string;
-};
-
 function jsonResponse(
   payload: { ok?: boolean; error?: string; received?: boolean },
   status = 200,
@@ -75,10 +69,10 @@ function jsonResponse(
   });
 }
 
-// Locates the profile a subscription belongs to: the user id rides through
-// checkout custom_data; afterwards the stored customer id (or the account
-// email, as a last resort) keeps existing customers attached even when
-// custom_data is absent (e.g. resubscribing via Paddle's hosted pages).
+// Locates the profile a subscription belongs to. Existing subscriptions use
+// the stored Paddle customer id; first-time checkouts must carry a user id
+// authenticated by the server-issued binding. Paddle customer email is never
+// trusted as account ownership proof.
 async function resolveProfileRow(
   supabaseAdmin: { from: (table: string) => any },
   sub: PaddleSubscription,
@@ -113,56 +107,7 @@ async function resolveProfileRow(
     if (row) return row;
   }
 
-  if (customerId) {
-    // Last resort: fetch the customer's email from Paddle and match profiles.
-    const { paddleRequest } = await import("@/lib/paddle.server");
-    const { data: customer } = await paddleRequest<{ email?: string }>(
-      "GET",
-      `/customers/${encodeURIComponent(customerId)}`,
-    );
-    const email = customer?.email;
-    if (email) {
-      // auth.users is not exposed to PostgREST — resolve via the GoTrue
-      // admin API (a PostgREST query on "users" silently returns nothing).
-      const { getAuthUserIdByEmail } = await import("@/integrations/supabase/auth-lookup.server");
-      const userId = await getAuthUserIdByEmail(email);
-      if (userId) {
-        const { data } = await supabaseAdmin
-          .from("profiles")
-          .select("id, paddle_customer_id, paddle_subscription_id, plan_tier")
-          .eq("id", userId)
-          .limit(1);
-        return (data as ProfileBillingRow[] | null)?.[0] ?? null;
-      }
-    }
-  }
   return null;
-}
-
-// Attaches a Paddle customer to the matching profile (matched by email via
-// auth.users). customer.created fires before checkout completes, so by the
-// time the subscription event arrives the profile already carries the
-// customer id. Idempotent: re-running the same event is a no-op.
-async function applyCustomer(
-  supabaseAdmin: { from: (table: string) => any },
-  customer: PaddleCustomer,
-): Promise<void> {
-  if (!customer.id || !customer.email) return;
-
-  const { data: existing } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .eq("paddle_customer_id", customer.id)
-    .limit(1);
-  if ((existing as Array<{ id: string }> | null)?.length) return; // already attached
-
-  // auth.users is not exposed to PostgREST — resolve via the GoTrue admin
-  // API (a PostgREST query on "users" silently returns nothing).
-  const { getAuthUserIdByEmail } = await import("@/integrations/supabase/auth-lookup.server");
-  const userId = await getAuthUserIdByEmail(customer.email);
-  if (!userId) return; // no account with that email yet — subscription events will attach it
-
-  await supabaseAdmin.from("profiles").update({ paddle_customer_id: customer.id }).eq("id", userId);
 }
 
 // Maps a Paddle subscription onto the profile's billing columns.
@@ -352,13 +297,6 @@ async function handlePaddleWebhook(request: Request): Promise<Response> {
       // created/updated/canceled all flow through one path: canceled lands as
       // the free tier; created/updated map the tier from the price amount.
       await applySubscription(supabaseAdmin, sub);
-      return jsonResponse({ received: true });
-    }
-
-    if (eventType === "customer.created" || eventType === "customer.updated") {
-      // Attached customers let the portal resolve server-side from the
-      // profile — no customer id ever comes from the client.
-      await applyCustomer(supabaseAdmin, event.data as PaddleCustomer);
       return jsonResponse({ received: true });
     }
 
