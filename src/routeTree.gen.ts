@@ -19,6 +19,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RefundRouteImport } from './routes/refund'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AdminAffiliatesRouteImport } from './routes/admin/affiliates'
 import { Route as ApiCronRunAlertsRouteImport } from './routes/api/cron/run-alerts'
@@ -77,6 +78,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/admin/affiliates': typeof AdminAffiliatesRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
@@ -143,6 +150,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/admin/affiliates': typeof AdminAffiliatesRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/refund': typeof RefundRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/admin/affiliates': typeof AdminAffiliatesRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
@@ -184,6 +193,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/refund'
     | '/signup'
+    | '/sitemap.xml'
     | '/terms'
     | '/admin/affiliates'
     | '/api/cron/run-alerts'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/refund'
     | '/signup'
+    | '/sitemap.xml'
     | '/terms'
     | '/admin/affiliates'
     | '/api/cron/run-alerts'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/refund'
     | '/signup'
+    | '/sitemap.xml'
     | '/terms'
     | '/admin/affiliates'
     | '/api/cron/run-alerts'
@@ -242,6 +254,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   RefundRoute: typeof RefundRoute
   SignupRoute: typeof SignupRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
   AdminAffiliatesRoute: typeof AdminAffiliatesRoute
   ApiCronRunAlertsRoute: typeof ApiCronRunAlertsRoute
@@ -323,6 +336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -386,6 +406,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   RefundRoute: RefundRoute,
   SignupRoute: SignupRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
   AdminAffiliatesRoute: AdminAffiliatesRoute,
   ApiCronRunAlertsRoute: ApiCronRunAlertsRoute,
