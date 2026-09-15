@@ -29,6 +29,13 @@
       "when": 1789443133833,
       "tag": "0003_restore_market_alert_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789455783293,
+      "tag": "0004_protect_profile_billing_fields",
+      "breakpoints": true
     }
   ]
 }
