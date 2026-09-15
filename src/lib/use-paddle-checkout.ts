@@ -11,6 +11,7 @@ import { getPaddleCheckoutBinding, getPaddleEnv } from "@/lib/account.functions"
 type PaddleEnv = {
   clientToken: string | null;
   environment: "sandbox" | "live";
+  paddleCustomerId: string | null;
   priceIds: {
     watchMonthly: string | null;
     watchYearly: string | null;
@@ -25,7 +26,11 @@ declare global {
   interface Window {
     Paddle?: {
       Environment: { set: (env: string) => void };
-      Initialize: (options: { token: string; eventCallback?: (event: PaddleEventPayload) => void }) => void;
+      Initialize: (options: {
+        token: string;
+        pwCustomer?: { id: string };
+        eventCallback?: (event: PaddleEventPayload) => void;
+      }) => void;
       Checkout: {
         open: (options: {
           items: Array<{ priceId: string; quantity: number }>;
@@ -94,6 +99,10 @@ export function usePaddleCheckout(options?: {
       if (paddleEnv.environment !== "live") Paddle.Environment.set("sandbox");
       Paddle.Initialize({
         token: paddleEnv.clientToken,
+        // Paddle Retain: pass the signed-in customer's Paddle customer ID
+        // (ctm_...) so Retain can track and recover their subscription.
+        // Null for signed-out visitors or customers without a Paddle profile.
+        ...(paddleEnv.paddleCustomerId ? { pwCustomer: { id: paddleEnv.paddleCustomerId } } : {}),
         eventCallback: (event) => {
           if (event.name === "checkout.completed") successRef.current?.();
         },

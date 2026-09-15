@@ -269,6 +269,16 @@ async function applyAffiliateCommission(
 }
 
 async function handlePaddleWebhook(request: Request): Promise<Response> {
+  // Defense in depth for the live account: Paddle sends webhooks only from
+  // its published IP ranges, so non-Paddle sources are dropped before any
+  // processing. Signature verification below remains the authoritative check.
+  const { rejectPaddleWebhookSource } = await import("@/lib/paddle-webhook-ip.server");
+  const sourceRejection = await rejectPaddleWebhookSource(request);
+  if (sourceRejection) {
+    console.warn("paddle webhook:", sourceRejection);
+    return jsonResponse({ error: "Forbidden." }, 403);
+  }
+
   const secret = process.env["PADDLE_WEBHOOK_SECRET"]?.trim();
   if (!secret) {
     console.error("paddle webhook: PADDLE_WEBHOOK_SECRET is not set");

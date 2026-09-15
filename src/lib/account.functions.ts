@@ -927,6 +927,7 @@ export const getPaddleEnv = createServerFn({ method: "POST" })
     async (): Promise<{
       clientToken: string | null;
       environment: "sandbox" | "live";
+      paddleCustomerId: string | null;
       priceIds: {
         watchMonthly: string | null;
         watchYearly: string | null;
@@ -935,7 +936,50 @@ export const getPaddleEnv = createServerFn({ method: "POST" })
       };
     }> => {
       const { paddleClientToken, paddleApiBase, catalogPriceId } = await import("@/lib/paddle.server");
+
+      // Paddle Retain (churn-reduction) needs the signed-in customer's Paddle
+      // customer ID at Paddle.Initialize (pwCustomer). The pricing page also
+      // serves signed-out visitors, so auth is best-effort here: when a valid
+      // bearer token is present, resolve the ID server-side from the profile
+      // (never from the client); otherwise stay null and Retain simply isn't
+      // activated for that visitor.
+      let paddleCustomerId: string | null = null;
+      try {
+        const { getRequest } = await import("@tanstack/react-start/server");
+        const authHeader = getRequest()?.headers?.get("authorization") ?? null;
+        if (authHeader?.startsWith("Bearer ")) {
+          const token = authHeader.slice("Bearer ".length);
+          if (token && token.split(".").length === 3) {
+            const { createClient } = await import("@supabase/supabase-js");
+            const url = process.env["SUPABASE_URL"];
+            const anonKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+            if (url && anonKey) {
+              const authClient = createClient(url, anonKey, {
+                global: { headers: { Authorization: `Bearer ${token}` } },
+                auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+              });
+              const { data: claims } = await authClient.auth.getClaims(token);
+              const userId = claims?.claims?.sub;
+              if (userId) {
+                const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+                const { data: profile } = await supabaseAdmin
+                  .from("profiles")
+                  .select("paddle_customer_id")
+                  .eq("id", userId)
+                  .maybeSingle();
+                paddleCustomerId =
+                  (profile as { paddle_customer_id?: string | null } | null)?.paddle_customer_id ??
+                  null;
+              }
+            }
+          }
+        }
+      } catch {
+        // Identity is optional for this endpoint — never block checkout init.
+      }
+
       return {
+        paddleCustomerId,
         clientToken: paddleClientToken() ?? null,
         environment: paddleApiBase() === "https://api.paddle.com" ? "live" : "sandbox",
         priceIds: {
