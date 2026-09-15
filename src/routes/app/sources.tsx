@@ -24,6 +24,7 @@ import {
 } from "@/lib/workspace.functions";
 
 export const Route = createFileRoute("/app/sources")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "Sources — theBizScope" }],
   }),

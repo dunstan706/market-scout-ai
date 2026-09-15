@@ -12,6 +12,7 @@ import { listCompetitors, type CompetitorProfile, type FactField } from "@/lib/w
 import { listBusinesses } from "@/lib/account.functions";
 
 export const Route = createFileRoute("/app/compare")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "Compare — theBizScope" }],
   }),

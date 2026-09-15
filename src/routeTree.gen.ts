@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AffiliatesRouteImport } from './routes/affiliates'
-import { Route as AppRouteImport } from './routes/app'
+import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DashboardtestRouteImport } from './routes/dashboardtest'
 import { Route as LoginRouteImport } from './routes/login'
@@ -23,6 +23,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AdminAffiliatesRouteImport } from './routes/admin/affiliates'
+import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAlertsRouteImport } from './routes/app/alerts'
 import { Route as AppCompareRouteImport } from './routes/app/compare'
 import { Route as AppLocationsRouteImport } from './routes/app/locations'
@@ -48,7 +49,7 @@ const AffiliatesRoute = AffiliatesRouteImport.update({
   path: '/affiliates',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRoute = AppRouteImport.update({
+const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
   getParentRoute: () => rootRouteImport,
@@ -108,30 +109,35 @@ const AdminAffiliatesRoute = AdminAffiliatesRouteImport.update({
   path: '/admin/affiliates',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppAlertsRoute = AppAlertsRouteImport.update({
   id: '/alerts',
   path: '/alerts',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppCompareRoute = AppCompareRouteImport.update({
   id: '/compare',
   path: '/compare',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppLocationsRoute = AppLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppMarketSignalsRoute = AppMarketSignalsRouteImport.update({
   id: '/market-signals',
   path: '/market-signals',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppSourcesRoute = AppSourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const ApiCronRunAlertsRoute = ApiCronRunAlertsRouteImport.update({
   id: '/api/cron/run-alerts',
@@ -151,22 +157,22 @@ const ApiWebhooksPaddleRoute = ApiWebhooksPaddleRouteImport.update({
 const AppBriefsIndexRoute = AppBriefsIndexRouteImport.update({
   id: '/briefs/',
   path: '/briefs/',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppBriefsNewRoute = AppBriefsNewRouteImport.update({
   id: '/briefs/new',
   path: '/briefs/new',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppCompetitorsIndexRoute = AppCompetitorsIndexRouteImport.update({
   id: '/competitors/',
   path: '/competitors/',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppCompetitorsNewRoute = AppCompetitorsNewRouteImport.update({
   id: '/competitors/new',
   path: '/competitors/new',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
   id: '/lovable/email/auth/preview',
@@ -181,8 +187,8 @@ const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteRouteWithChildren
   '/affiliates': typeof AffiliatesRoute
-  '/app': typeof AppRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
@@ -199,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/app/locations': typeof AppLocationsRoute
   '/app/market-signals': typeof AppMarketSignalsRoute
   '/app/sources': typeof AppSourcesRoute
+  '/app/': typeof AppIndexRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
@@ -212,7 +219,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/affiliates': typeof AffiliatesRoute
-  '/app': typeof AppRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
@@ -229,6 +235,7 @@ export interface FileRoutesByTo {
   '/app/locations': typeof AppLocationsRoute
   '/app/market-signals': typeof AppMarketSignalsRoute
   '/app/sources': typeof AppSourcesRoute
+  '/app': typeof AppIndexRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
@@ -242,8 +249,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/app': typeof AppRouteRouteWithChildren
   '/affiliates': typeof AffiliatesRoute
-  '/app': typeof AppRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/dashboardtest': typeof DashboardtestRoute
   '/login': typeof LoginRoute
@@ -260,6 +267,7 @@ export interface FileRoutesById {
   '/app/locations': typeof AppLocationsRoute
   '/app/market-signals': typeof AppMarketSignalsRoute
   '/app/sources': typeof AppSourcesRoute
+  '/app/': typeof AppIndexRoute
   '/api/cron/run-alerts': typeof ApiCronRunAlertsRoute
   '/api/cron/run-monitoring': typeof ApiCronRunMonitoringRoute
   '/api/webhooks/paddle': typeof ApiWebhooksPaddleRoute
@@ -274,8 +282,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/affiliates'
     | '/app'
+    | '/affiliates'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
@@ -292,6 +300,7 @@ export interface FileRouteTypes {
     | '/app/locations'
     | '/app/market-signals'
     | '/app/sources'
+    | '/app/'
     | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
@@ -305,7 +314,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/affiliates'
-    | '/app'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
@@ -322,6 +330,7 @@ export interface FileRouteTypes {
     | '/app/locations'
     | '/app/market-signals'
     | '/app/sources'
+    | '/app'
     | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
@@ -334,8 +343,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/affiliates'
     | '/app'
+    | '/affiliates'
     | '/dashboard'
     | '/dashboardtest'
     | '/login'
@@ -352,6 +361,7 @@ export interface FileRouteTypes {
     | '/app/locations'
     | '/app/market-signals'
     | '/app/sources'
+    | '/app/'
     | '/api/cron/run-alerts'
     | '/api/cron/run-monitoring'
     | '/api/webhooks/paddle'
@@ -365,8 +375,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRouteRoute: typeof AppRouteRouteWithChildren
   AffiliatesRoute: typeof AffiliatesRoute
-  AppRoute: typeof AppRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   DashboardtestRoute: typeof DashboardtestRoute
   LoginRoute: typeof LoginRoute
@@ -405,7 +415,7 @@ declare module '@tanstack/react-router' {
       id: '/app'
       path: '/app'
       fullPath: '/app'
-      preLoaderRoute: typeof AppRouteImport
+      preLoaderRoute: typeof AppRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -485,40 +495,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAffiliatesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/alerts': {
       id: '/app/alerts'
       path: '/alerts'
       fullPath: '/app/alerts'
       preLoaderRoute: typeof AppAlertsRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/compare': {
       id: '/app/compare'
       path: '/compare'
       fullPath: '/app/compare'
       preLoaderRoute: typeof AppCompareRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/locations': {
       id: '/app/locations'
       path: '/locations'
       fullPath: '/app/locations'
       preLoaderRoute: typeof AppLocationsRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/market-signals': {
       id: '/app/market-signals'
       path: '/market-signals'
       fullPath: '/app/market-signals'
       preLoaderRoute: typeof AppMarketSignalsRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/sources': {
       id: '/app/sources'
       path: '/sources'
       fullPath: '/app/sources'
       preLoaderRoute: typeof AppSourcesRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/api/cron/run-alerts': {
       id: '/api/cron/run-alerts'
@@ -546,28 +563,28 @@ declare module '@tanstack/react-router' {
       path: '/briefs'
       fullPath: '/app/briefs/'
       preLoaderRoute: typeof AppBriefsIndexRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/briefs/new': {
       id: '/app/briefs/new'
       path: '/briefs/new'
       fullPath: '/app/briefs/new'
       preLoaderRoute: typeof AppBriefsNewRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/competitors/': {
       id: '/app/competitors/'
       path: '/competitors'
       fullPath: '/app/competitors/'
       preLoaderRoute: typeof AppCompetitorsIndexRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/app/competitors/new': {
       id: '/app/competitors/new'
       path: '/competitors/new'
       fullPath: '/app/competitors/new'
       preLoaderRoute: typeof AppCompetitorsNewRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppRouteRoute
     }
     '/lovable/email/auth/preview': {
       id: '/lovable/email/auth/preview'
@@ -586,36 +603,40 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AppRouteChildren {
+interface AppRouteRouteChildren {
   AppAlertsRoute: typeof AppAlertsRoute
   AppCompareRoute: typeof AppCompareRoute
   AppLocationsRoute: typeof AppLocationsRoute
   AppMarketSignalsRoute: typeof AppMarketSignalsRoute
   AppSourcesRoute: typeof AppSourcesRoute
+  AppIndexRoute: typeof AppIndexRoute
   AppBriefsNewRoute: typeof AppBriefsNewRoute
   AppCompetitorsNewRoute: typeof AppCompetitorsNewRoute
   AppBriefsIndexRoute: typeof AppBriefsIndexRoute
   AppCompetitorsIndexRoute: typeof AppCompetitorsIndexRoute
 }
 
-const AppRouteChildren: AppRouteChildren = {
+const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAlertsRoute: AppAlertsRoute,
   AppCompareRoute: AppCompareRoute,
   AppLocationsRoute: AppLocationsRoute,
   AppMarketSignalsRoute: AppMarketSignalsRoute,
   AppSourcesRoute: AppSourcesRoute,
+  AppIndexRoute: AppIndexRoute,
   AppBriefsNewRoute: AppBriefsNewRoute,
   AppCompetitorsNewRoute: AppCompetitorsNewRoute,
   AppBriefsIndexRoute: AppBriefsIndexRoute,
   AppCompetitorsIndexRoute: AppCompetitorsIndexRoute,
 }
 
-const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
+  AppRouteRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRouteRoute: AppRouteRouteWithChildren,
   AffiliatesRoute: AffiliatesRoute,
-  AppRoute: AppRouteWithChildren,
   DashboardRoute: DashboardRoute,
   DashboardtestRoute: DashboardtestRoute,
   LoginRoute: LoginRoute,

@@ -15,6 +15,7 @@ import {
 import { listBusinesses } from "@/lib/account.functions";
 
 export const Route = createFileRoute("/app/locations")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "Locations — theBizScope" }],
   }),

@@ -16,6 +16,7 @@ import {
 } from "@/lib/workspace.functions";
 
 export const Route = createFileRoute("/app/alerts")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "Alert rules — theBizScope" }],
   }),

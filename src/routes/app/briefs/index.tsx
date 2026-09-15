@@ -11,6 +11,7 @@ import { EmptyHint, btnGhost } from "@/components/workspace-ui";
 import { listWorkspaceBriefs, type BriefRow } from "@/lib/workspace.functions";
 
 export const Route = createFileRoute("/app/briefs/")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "Briefs — theBizScope" }],
   }),

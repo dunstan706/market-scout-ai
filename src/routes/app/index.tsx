@@ -15,7 +15,8 @@ import {
   listWorkspaceBriefs,
 } from "@/lib/workspace.functions";
 
-export const Route = createFileRoute("/app")({
+export const Route = createFileRoute("/app/")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [{ title: "Workspace — theBizScope" }],
   }),
