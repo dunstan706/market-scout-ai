@@ -182,6 +182,47 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_rules: {
+        Row: {
+          business_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          rule_kind: string
+          threshold: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          rule_kind: string
+          threshold?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          rule_kind?: string
+          threshold?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_rules_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       briefs: {
         Row: {
           brief: Json
@@ -193,8 +234,8 @@ export type Database = {
           id: string
           location: string
           status: string
-          week_start: string | null
           user_id: string
+          week_start: string | null
         }
         Insert: {
           brief: Json
@@ -206,8 +247,8 @@ export type Database = {
           id?: string
           location: string
           status?: string
-          week_start?: string | null
           user_id: string
+          week_start?: string | null
         }
         Update: {
           brief?: Json
@@ -219,8 +260,8 @@ export type Database = {
           id?: string
           location?: string
           status?: string
-          week_start?: string | null
           user_id?: string
+          week_start?: string | null
         }
         Relationships: [
           {
@@ -270,6 +311,179 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      competitor_events: {
+        Row: {
+          business_id: string
+          competitor_id: string | null
+          created_at: string
+          detail: string | null
+          event_kind: string
+          id: string
+          occurred_at: string
+          source_label: string | null
+          source_url: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          competitor_id?: string | null
+          created_at?: string
+          detail?: string | null
+          event_kind: string
+          id?: string
+          occurred_at?: string
+          source_label?: string | null
+          source_url?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          competitor_id?: string | null
+          created_at?: string
+          detail?: string | null
+          event_kind?: string
+          id?: string
+          occurred_at?: string
+          source_label?: string | null
+          source_url?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_events_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_events_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_facts: {
+        Row: {
+          business_id: string
+          competitor_id: string
+          created_at: string
+          effective_date: string | null
+          field: string
+          id: string
+          needs_review: boolean
+          source_label: string | null
+          source_url: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          value: string | null
+        }
+        Insert: {
+          business_id: string
+          competitor_id: string
+          created_at?: string
+          effective_date?: string | null
+          field: string
+          id?: string
+          needs_review?: boolean
+          source_label?: string | null
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          value?: string | null
+        }
+        Update: {
+          business_id?: string
+          competitor_id?: string
+          created_at?: string
+          effective_date?: string | null
+          field?: string
+          id?: string
+          needs_review?: boolean
+          source_label?: string | null
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_facts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_facts_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitors: {
+        Row: {
+          area: string | null
+          business_id: string
+          category: string | null
+          created_at: string
+          google_place_id: string | null
+          id: string
+          name: string
+          notes: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          website_url: string | null
+        }
+        Insert: {
+          area?: string | null
+          business_id: string
+          category?: string | null
+          created_at?: string
+          google_place_id?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          website_url?: string | null
+        }
+        Update: {
+          area?: string | null
+          business_id?: string
+          category?: string | null
+          created_at?: string
+          google_place_id?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          website_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitors_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       market_alerts: {
         Row: {
@@ -425,207 +639,6 @@ export type Database = {
         }
         Relationships: []
       }
-      waitlist_signups: {
-        Row: {
-          business_name: string | null
-          business_type: string
-          city: string | null
-          created_at: string
-          email: string
-          id: string
-          notes: string | null
-          user_id: string | null
-        }
-        Insert: {
-          business_name?: string | null
-          business_type?: string
-          city?: string | null
-          created_at?: string
-          email: string
-          id?: string
-          notes?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          business_name?: string | null
-          business_type?: string
-          city?: string | null
-          created_at?: string
-          email?: string
-          id?: string
-          notes?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      alert_rules: {
-        Row: {
-          business_id: string
-          created_at: string
-          enabled: boolean
-          id: string
-          rule_kind: string
-          threshold: Json
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          business_id: string
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          rule_kind: string
-          threshold?: Json
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          business_id?: string
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          rule_kind?: string
-          threshold?: Json
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      competitor_events: {
-        Row: {
-          business_id: string
-          competitor_id: string | null
-          created_at: string
-          detail: string | null
-          event_kind: string
-          id: string
-          occurred_at: string
-          source_label: string | null
-          source_url: string | null
-          title: string
-          user_id: string
-        }
-        Insert: {
-          business_id: string
-          competitor_id?: string | null
-          created_at?: string
-          detail?: string | null
-          event_kind: string
-          id?: string
-          occurred_at?: string
-          source_label?: string | null
-          source_url?: string | null
-          title: string
-          user_id: string
-        }
-        Update: {
-          business_id?: string
-          competitor_id?: string | null
-          created_at?: string
-          detail?: string | null
-          event_kind?: string
-          id?: string
-          occurred_at?: string
-          source_label?: string | null
-          source_url?: string | null
-          title?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      competitor_facts: {
-        Row: {
-          business_id: string
-          competitor_id: string
-          created_at: string
-          effective_date: string | null
-          field: string
-          id: string
-          needs_review: boolean
-          source_label: string | null
-          source_url: string | null
-          status: string
-          updated_at: string
-          user_id: string
-          value: string | null
-        }
-        Insert: {
-          business_id: string
-          competitor_id: string
-          created_at?: string
-          effective_date?: string | null
-          field: string
-          id?: string
-          needs_review?: boolean
-          source_label?: string | null
-          source_url?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-          value?: string | null
-        }
-        Update: {
-          business_id?: string
-          competitor_id?: string
-          created_at?: string
-          effective_date?: string | null
-          field?: string
-          id?: string
-          needs_review?: boolean
-          source_label?: string | null
-          source_url?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-          value?: string | null
-        }
-        Relationships: []
-      }
-      competitors: {
-        Row: {
-          area: string | null
-          business_id: string
-          category: string | null
-          created_at: string
-          google_place_id: string | null
-          id: string
-          name: string
-          notes: string | null
-          status: string
-          updated_at: string
-          user_id: string
-          website_url: string | null
-        }
-        Insert: {
-          area?: string | null
-          business_id: string
-          category?: string | null
-          created_at?: string
-          google_place_id?: string | null
-          id?: string
-          name: string
-          notes?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-          website_url?: string | null
-        }
-        Update: {
-          area?: string | null
-          business_id?: string
-          category?: string | null
-          created_at?: string
-          google_place_id?: string | null
-          id?: string
-          name?: string
-          notes?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-          website_url?: string | null
-        }
-        Relationships: []
-      }
       tracked_sources: {
         Row: {
           business_id: string
@@ -671,6 +684,54 @@ export type Database = {
           updated_at?: string
           url?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracked_sources_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracked_sources_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waitlist_signups: {
+        Row: {
+          business_name: string | null
+          business_type: string
+          city: string | null
+          created_at: string
+          email: string
+          id: string
+          notes: string | null
+          user_id: string | null
+        }
+        Insert: {
+          business_name?: string | null
+          business_type?: string
+          city?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          notes?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          business_name?: string | null
+          business_type?: string
+          city?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          notes?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
