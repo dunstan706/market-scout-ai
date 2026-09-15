@@ -25,6 +25,7 @@ export type AffiliateProfile = {
 
 export type AffiliateCommissionRow = {
   id: string;
+  referredUserId: string;
   amount: number;
   currencyCode: string;
   status: "pending" | "available" | "paid" | "reversed";
@@ -35,6 +36,7 @@ export type AffiliateCommissionRow = {
 
 export type AffiliateReferralRow = {
   id: string;
+  userId: string;
   email: string | null;
   converted: boolean;
   createdAt: string;
@@ -53,10 +55,13 @@ export type AffiliateStats = {
   referralLink: string | null;
   totals: {
     earned: number; // everything ever approved (pending + available + paid)
+    recent30: number; // commissions created in the trailing 30 days
     available: number; // matured, not yet paid
     pending: number; // inside the 30-day holding window
     paid: number;
   };
+  // referred_user_id -> lifetime earned from that referral (non-reversed).
+  referralEarnings: Record<string, number>;
   referralCount: number;
   convertedCount: number;
   commissions: AffiliateCommissionRow[];
@@ -86,6 +91,7 @@ type AffiliateDbRow = {
 };
 type CommissionDbRow = {
   id: string;
+  referred_user_id?: string;
   amount: number;
   currency_code?: string;
   status: string;
@@ -95,6 +101,7 @@ type CommissionDbRow = {
 };
 type ReferralDbRow = {
   id: string;
+  referred_user_id?: string;
   referred_email?: string | null;
   converted_at?: string | null;
   created_at: string;
@@ -240,7 +247,8 @@ export const getMyAffiliation = createServerFn({ method: "POST" })
       return {
         affiliate: null,
         referralLink: null,
-        totals: { earned: 0, available: 0, pending: 0, paid: 0 },
+        totals: { earned: 0, recent30: 0, available: 0, pending: 0, paid: 0 },
+        referralEarnings: {},
         referralCount: 0,
         convertedCount: 0,
         commissions: [],
@@ -253,13 +261,13 @@ export const getMyAffiliation = createServerFn({ method: "POST" })
     const [commissionsRes, referralsRes, payoutsRes] = await Promise.all([
       context.supabase
         .from("affiliate_commissions")
-        .select("id, amount, currency_code, status, payment_number, created_at, payable_after")
+        .select("id, referred_user_id, amount, currency_code, status, payment_number, created_at, payable_after")
         .eq("affiliate_id", affiliateId)
         .order("created_at", { ascending: false })
         .limit(100),
       context.supabase
         .from("affiliate_referrals")
-        .select("id, referred_email, converted_at, created_at")
+        .select("id, referred_user_id, referred_email, converted_at, created_at")
         .eq("affiliate_id", affiliateId)
         .order("created_at", { ascending: false })
         .limit(200),
@@ -273,6 +281,7 @@ export const getMyAffiliation = createServerFn({ method: "POST" })
 
     const commissions = ((commissionsRes.data ?? []) as CommissionDbRow[]).map((c) => ({
       id: c.id,
+      referredUserId: c.referred_user_id ?? "",
       amount: Number(c.amount),
       currencyCode: c.currency_code ?? "USD",
       status: c.status as AffiliateCommissionRow["status"],
@@ -282,6 +291,7 @@ export const getMyAffiliation = createServerFn({ method: "POST" })
     }));
     const referrals = ((referralsRes.data ?? []) as ReferralDbRow[]).map((r) => ({
       id: r.id,
+      userId: r.referred_user_id ?? "",
       email: r.referred_email ?? null,
       converted: Boolean(r.converted_at),
       createdAt: r.created_at,
@@ -297,6 +307,11 @@ export const getMyAffiliation = createServerFn({ method: "POST" })
     const sum = (rows: Array<AffiliateCommissionRow | AffiliatePayoutRow>) =>
       rows.reduce((acc, c) => acc + c.amount, 0);
     const now = Date.now();
+    const activeCommissions = commissions.filter((c) => c.status !== "reversed");
+    const referralEarnings: Record<string, number> = {};
+    for (const c of activeCommissions) {
+      referralEarnings[c.referredUserId] = (referralEarnings[c.referredUserId] ?? 0) + c.amount;
+    }
     return {
       affiliate: {
         id: a.id,
@@ -309,11 +324,15 @@ export const getMyAffiliation = createServerFn({ method: "POST" })
       },
       referralLink: `${siteOrigin()}/?ref=${a.code}`,
       totals: {
-        earned: sum(commissions.filter((c) => c.status !== "reversed")),
+        earned: sum(activeCommissions),
+        recent30: sum(
+          activeCommissions.filter((c) => Date.parse(c.createdAt) >= now - 30 * 24 * 60 * 60 * 1000),
+        ),
         available: sum(commissions.filter((c) => c.status === "available" && Date.parse(c.payableAfter) <= now)),
         pending: sum(commissions.filter((c) => c.status === "pending" || Date.parse(c.payableAfter) > now)),
         paid: sum(payouts),
       },
+      referralEarnings,
       referralCount: referrals.length,
       convertedCount: referrals.filter((r) => r.converted).length,
       commissions,
