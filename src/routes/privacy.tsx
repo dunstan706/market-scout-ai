@@ -3,6 +3,7 @@ import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { Reveal } from "@/components/Reveal";
 
 export const Route = createFileRoute("/privacy")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Privacy — theBizScope" },

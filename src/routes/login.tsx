@@ -21,10 +21,12 @@ async function lockReferral(claimFn: (input: { data: { code: string; sourceUrl?:
 }
 
 export const Route = createFileRoute("/login")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Log in — theBizScope" },
       { name: "description", content: "Log in to your theBizScope dashboard." },
+      { name: "robots", content: "noindex" },
     ],
     // Checkout intent (?tier=&cadence=&email=) survives a redirect to login.
     validateSearch: (

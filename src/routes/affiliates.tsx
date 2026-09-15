@@ -17,6 +17,7 @@ import {
 // bottom) — this page surfaces the data, the ledger lives in the database.
 
 export const Route = createFileRoute("/affiliates")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Affiliates — theBizScope" },
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/affiliates")({
         name: "description",
         content: "Earn 10% of every subscription payment you refer to theBizScope, for the first 12 months.",
       },
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: AffiliatesPage,

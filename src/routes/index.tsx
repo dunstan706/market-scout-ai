@@ -10,6 +10,7 @@ import { useSmoothedScroll } from "@/lib/use-smoothed-scroll";
 import { useGridCols } from "@/lib/use-grid-cols";
 
 export const Route = createFileRoute("/")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "theBizScope — Weekly market briefs for salons & spas" },

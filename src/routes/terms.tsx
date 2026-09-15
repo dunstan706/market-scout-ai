@@ -4,6 +4,7 @@ import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { Reveal } from "@/components/Reveal";
 
 export const Route = createFileRoute("/terms")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Terms — theBizScope" },
