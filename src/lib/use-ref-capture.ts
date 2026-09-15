@@ -24,7 +24,7 @@ export function RefCapture() {
       if (!ref || !/^[a-z0-9][a-z0-9-]{1,40}$/i.test(ref)) return;
       const existing = readRefCookie();
       if (existing) return; // first click wins
-      document.cookie = `${REF_COOKIE}=${encodeURIComponent(ref as string)}; max-age=${REF_MAX_AGE}; path=/; SameSite=Lax`;
+      document.cookie = `${REF_COOKIE}=${encodeURIComponent(ref as string)}; max-age=${REF_MAX_AGE}; path=/; SameSite=Lax; Secure`;
     } catch {
       // Cookie blocked — attribution just doesn't happen for this visitor.
     }
