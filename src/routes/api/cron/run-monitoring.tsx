@@ -53,6 +53,7 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
       { detectChanges, parseResearchSnapshot },
       { buildMarketAnalysis },
       { sendEmail, renderBriefEmail },
+      { syncScanToWorkspace },
     ] = await Promise.all([
       import("@/integrations/supabase/client.server"),
       import("@/lib/local-research.server"),
@@ -60,6 +61,7 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
       import("@/lib/change-detection"),
       import("@/lib/market-analysis"),
       import("@/lib/email.server"),
+      import("@/lib/workspace-sync.server"),
     ]);
 
     // select("*") (not an explicit column list) so a profile table that has
@@ -182,6 +184,20 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
             snapshot: research as unknown as Json,
             detected_changes: changes as unknown as Json,
           });
+
+          // Mirror scan findings into the market workspace (competitors +
+          // facts). Manual entries always win; the weekly run fills gaps and
+          // flags changed values for review. Sync failures never fail the run.
+          if (business.id) {
+            try {
+              const syncResult = await syncScanToWorkspace(supabaseAdmin, business.id, profile.id, research);
+              if (syncResult.errors.length > 0) {
+                console.error(`workspace sync issues for ${business.id}`, syncResult.errors);
+              }
+            } catch (syncError) {
+              console.error(`workspace sync failed for ${business.id}`, syncError);
+            }
+          }
 
           // Pin the matched listing on the business row so future weekly runs
           // key on the place ID instead of re-matching the typed name.

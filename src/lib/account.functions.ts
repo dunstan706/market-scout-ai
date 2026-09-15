@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database, Json, Tables } from "@/integrations/supabase/types";
 import { BriefSchema } from "@/lib/brief-core";
 import { collectLocalResearch, type ResearchSnapshot } from "@/lib/local-research.server";
+import { syncScanToWorkspace } from "@/lib/workspace-sync.server";
 import { describeBriefError, writeBrief } from "@/lib/brief-writer.server";
 import type { LocalizedPrice } from "@/lib/paddle.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -633,6 +634,15 @@ export const generateMonitoringBrief = createServerFn({ method: "POST" })
           detected_changes: changes as unknown as Json,
         });
       if (snapshotError) console.error("monitoring snapshot insert failed", snapshotError);
+
+      // Mirror scan findings into the market workspace (competitors + facts).
+      // Manual entries always win; scan data fills gaps and flags changes.
+      try {
+        const syncResult = await syncScanToWorkspace(context.supabase, data.businessId, userId, research);
+        if (syncResult.errors.length > 0) console.error("workspace sync issues", syncResult.errors);
+      } catch (syncError) {
+        console.error("workspace sync failed", syncError);
+      }
 
       // Pin the matched listing on the business row: from here on, own-listing
       // lookups key on the place ID and stop depending on the typed name

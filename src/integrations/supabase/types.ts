@@ -378,6 +378,7 @@ export type Database = {
           field: string
           id: string
           needs_review: boolean
+          origin: string
           source_label: string | null
           source_url: string | null
           status: string
@@ -393,6 +394,7 @@ export type Database = {
           field: string
           id?: string
           needs_review?: boolean
+          origin?: string
           source_label?: string | null
           source_url?: string | null
           status?: string
@@ -408,6 +410,7 @@ export type Database = {
           field?: string
           id?: string
           needs_review?: boolean
+          origin?: string
           source_label?: string | null
           source_url?: string | null
           status?: string
