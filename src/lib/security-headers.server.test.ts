@@ -12,7 +12,9 @@ describe("buildSecurityHeaders", () => {
   it("sets the hardening headers", () => {
     expect(headers["Strict-Transport-Security"]).toContain("max-age=31536000");
     expect(headers["X-Content-Type-Options"]).toBe("nosniff");
-    expect(headers["X-Frame-Options"]).toBe("DENY");
+    // No X-Frame-Options by design: CSP frame-ancestors covers clickjacking
+    // while still allowing the Lovable preview pane.
+    expect(headers["X-Frame-Options"]).toBeUndefined();
     expect(headers["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
     expect(headers["Cross-Origin-Opener-Policy"]).toBe("same-origin");
   });
@@ -21,9 +23,10 @@ describe("buildSecurityHeaders", () => {
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("base-uri 'self'");
-    expect(csp).toContain("frame-ancestors 'none'");
-    // Clickjacking defense must never regress.
+    // Clickjacking defense: framing restricted, never wide open.
+    expect(csp).toMatch(/frame-ancestors 'self'[^;]*|frame-ancestors [^;]*lovable/);
     expect(csp).not.toContain("frame-ancestors *");
+    expect(csp).not.toContain("frame-ancestors 'none'");
   });
 
   it("keeps the sandbox and live Paddle checkout frames allowed", () => {
@@ -31,9 +34,21 @@ describe("buildSecurityHeaders", () => {
     expect(csp).toContain("https://sandbox-checkout.paddle.com");
   });
 
-  it("allows inline styles (SSR/Tailwind) but no other inline bypass", () => {
+  it("allows inline scripts and the Paddle CDN (hydration + checkout break without them)", () => {
+    // Regression guard: the strict policy once white-screened every page by
+    // blocking TanStack Start's inline bootstrap (window.$_TSR).
+    expect(csp).toMatch(/script-src [^;]*'unsafe-inline'/);
+    expect(csp).toContain("https://cdn.paddle.com");
+    expect(csp).not.toContain("'unsafe-eval'");
+  });
+
+  it("allows the Lovable preview pane to embed the site", () => {
+    expect(csp).toMatch(/frame-ancestors [^;]*lovable/);
+    expect(csp).not.toContain("frame-ancestors 'none'");
+  });
+
+  it("allows inline styles (SSR/Tailwind) but keeps eval locked", () => {
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    expect(csp).not.toContain("script-src 'unsafe-inline'");
     expect(csp).not.toContain("'unsafe-eval'");
   });
 

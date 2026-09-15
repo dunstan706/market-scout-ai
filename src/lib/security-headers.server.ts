@@ -9,6 +9,9 @@
 const FONT_CSS_HOST = "https://fonts.googleapis.com";
 const FONT_FILE_HOST = "https://fonts.gstatic.com";
 
+// Paddle's checkout overlay injects its own stylesheet at runtime.
+const PADDLE_CSS_HOST = "https://sandbox-cdn.paddle.com https://cdn.paddle.com";
+
 // Checkout overlay iframes (live first; sandbox kept so testing still works
 // while PADDLE_ENV=sandbox).
 const PADDLE_FRAME_HOSTS = [
@@ -17,6 +20,13 @@ const PADDLE_FRAME_HOSTS = [
   "https://sandbox-checkout.paddle.com",
   "https://sandbox-buy.paddle.com",
 ];
+
+// Paddle.js is injected at runtime from their CDN.
+const PADDLE_SCRIPT_HOST = "https://cdn.paddle.com";
+
+// The Lovable preview pane embeds the site in an iframe; publishing/preview
+// break without these ancestors.
+const FRAME_ANCESTORS = ["'self'", "https://lovable.app", "https://lovable.dev"];
 
 function supabaseOrigins(): string[] {
   const url =
@@ -37,9 +47,14 @@ export function buildSecurityHeaders(): Record<string, string> {
 
   const csp = [
     "default-src 'self'",
+    // 'unsafe-inline' for scripts is REQUIRED: TanStack Start SSR ships its
+    // hydration bootstrap as inline scripts (window.$_TSR) and Lovable
+    // injects runtime inline scripts. Blocking them white-screens every page
+    // (reproduced in the browser). The CDN host is Paddle.js. No 'unsafe-eval'.
+    `script-src 'self' 'unsafe-inline' ${PADDLE_SCRIPT_HOST}`,
     // Inline styles are required for Tailwind/SSR-injected styles; styles
-    // otherwise load from self + Google Fonts.
-    `style-src 'self' 'unsafe-inline' ${FONT_CSS_HOST}`,
+    // otherwise load from self + Google Fonts + Paddle's checkout CSS.
+    `style-src 'self' 'unsafe-inline' ${FONT_CSS_HOST} ${PADDLE_CSS_HOST}`,
     `font-src 'self' ${FONT_FILE_HOST} data:`,
     `img-src 'self' data:`,
     `connect-src ${connectSrc.join(" ")}`,
@@ -47,15 +62,16 @@ export function buildSecurityHeaders(): Record<string, string> {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    // Clickjacking: block all framing (belt) + CSP directive (suspenders).
-    "frame-ancestors 'none'",
+    // Clickjacking defense; allows the Lovable preview pane.
+    `frame-ancestors ${FRAME_ANCESTORS.join(" ")}`,
   ].join("; ");
 
   return {
     "Content-Security-Policy": csp,
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
+    // No X-Frame-Options: CSP frame-ancestors (above) is the modern control
+    // and XFO DENY would additionally break the Lovable preview pane.
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Cross-Origin-Opener-Policy": "same-origin",
     // Least-surprise permissions: the site needs none of these.
