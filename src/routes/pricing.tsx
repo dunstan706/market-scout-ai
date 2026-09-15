@@ -9,6 +9,7 @@ import { previewLocalizedPricing } from "@/lib/account.functions";
 import { usePaddleCheckout } from "@/lib/use-paddle-checkout";
 
 export const Route = createFileRoute("/pricing")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Pricing — theBizScope" },

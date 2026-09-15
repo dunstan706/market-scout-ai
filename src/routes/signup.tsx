@@ -7,10 +7,12 @@ import { claimReferral } from "@/lib/affiliate.functions";
 import { readRefCookie } from "@/lib/use-ref-capture";
 
 export const Route = createFileRoute("/signup")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Create your account — theBizScope" },
       { name: "description", content: "Create a theBizScope account for your salon or spa." },
+      { name: "robots", content: "noindex" },
     ],
     // Coming from a Subscribe button: the checkout intent survives signup.
     validateSearch: (

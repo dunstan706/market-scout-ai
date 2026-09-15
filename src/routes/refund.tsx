@@ -4,6 +4,7 @@ import { ConstellationGrid } from "@/components/ConstellationGrid";
 import { Reveal } from "@/components/Reveal";
 
 export const Route = createFileRoute("/refund")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Refund policy — theBizScope" },

@@ -16,8 +16,12 @@ import {
 // available balance; the ledger (not the form) computes the amount.
 
 export const Route = createFileRoute("/admin/affiliates")({
+  staticData: { sitemap: false },
   head: () => ({
-    meta: [{ title: "Affiliate admin — theBizScope" }],
+    meta: [
+      { title: "Affiliate admin — theBizScope" },
+      { name: "robots", content: "noindex" },
+    ],
   }),
   component: AdminAffiliatesPage,
 });

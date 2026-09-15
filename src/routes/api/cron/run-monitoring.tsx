@@ -3,6 +3,7 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/api/cron/run-monitoring")({
+  staticData: { sitemap: false },
   // API-only route — never rendered as a page.
   component: () => null,
   server: {

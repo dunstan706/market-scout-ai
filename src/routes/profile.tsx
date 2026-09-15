@@ -39,10 +39,12 @@ function friendlySubscriptionStatus(status: string | null): string | null {
 }
 
 export const Route = createFileRoute("/profile")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Profile — theBizScope" },
       { name: "description", content: "Your theBizScope account and business details." },
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: ProfilePage,

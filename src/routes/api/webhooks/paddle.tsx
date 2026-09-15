@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/api/webhooks/paddle")({
+  staticData: { sitemap: false },
   // API-only route — never rendered as a page.
   component: () => null,
   server: {
