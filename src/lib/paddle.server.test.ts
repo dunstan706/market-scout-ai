@@ -4,9 +4,21 @@ import {
   PLAN_BY_PRICE,
   planFromSubscription,
   subscriptionGrantsAccess,
+  createCheckoutBinding,
+  verifyCheckoutBinding,
   verifyPaddleSignature,
 } from "@/lib/paddle.server";
 import { createHmac } from "node:crypto";
+
+describe("checkout account binding", () => {
+  it("accepts only the server-signed account id", () => {
+    process.env["PADDLE_WEBHOOK_SECRET"] = "pdl_ntfset_checkout_binding_secret";
+    const binding = createCheckoutBinding("user-a");
+    expect(verifyCheckoutBinding("user-a", binding)).toBe(true);
+    expect(verifyCheckoutBinding("user-b", binding)).toBe(false);
+    expect(verifyCheckoutBinding("user-a", "v1.forged")).toBe(false);
+  });
+});
 
 describe("subscriptionGrantsAccess", () => {
   it("grants access for active, trialing, and past_due (dunning grace)", () => {

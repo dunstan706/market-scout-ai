@@ -80,7 +80,7 @@ export function UpgradeOverlay({
 }) {
   const { ready: paddleReady, error: paddleError, openCheckout } = usePaddleCheckout();
   const fetchBilling = useServerFn(getBillingStatus);
-  const [session, setSession] = useState<{ email?: string | undefined; userId?: string | undefined }>({});
+  const [session, setSession] = useState<{ email?: string | undefined }>({});
   const [checkoutError, setCheckoutError] = useState("");
   // The viewer's tier drives the plan buttons: their tier reads "Current
   // plan", tiers included in it read "Included in your plan".
@@ -95,7 +95,7 @@ export function UpgradeOverlay({
       .then(({ supabase }) => supabase.auth.getUser())
       .then(({ data }) => {
         if (!active) return;
-        setSession({ email: data.user?.email ?? undefined, userId: data.user?.id ?? undefined });
+        setSession({ email: data.user?.email ?? undefined });
       })
       .catch(() => {});
     return () => {
@@ -145,10 +145,9 @@ export function UpgradeOverlay({
         tier: plan.tier,
         cadence: isMonthly ? "monthly" : "yearly",
         email: session.email,
-        userId: session.userId,
       });
     },
-    [paddleReady, paddleError, openCheckout, session.email, session.userId],
+    [paddleReady, paddleError, openCheckout, session.email],
   );
 
   if (!open) return null;

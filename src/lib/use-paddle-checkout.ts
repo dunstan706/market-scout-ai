@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getPaddleEnv } from "@/lib/account.functions";
+import { getPaddleCheckoutBinding, getPaddleEnv } from "@/lib/account.functions";
 
 // Loads Paddle.js (lazily, once) and opens the hosted checkout as a one-page
 // overlay for the exact price shown on the pricing page. The client token is
@@ -73,10 +73,10 @@ export function usePaddleCheckout(options?: {
     tier: "watch" | "advise";
     cadence: "monthly" | "yearly";
     email?: string | undefined;
-    userId?: string | undefined;
   }) => Promise<void>;
 } {
   const fetchEnv = useServerFn(getPaddleEnv);
+  const fetchCheckoutBinding = useServerFn(getPaddleCheckoutBinding);
   const [env, setEnv] = useState<PaddleEnv | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -119,7 +119,7 @@ export function usePaddleCheckout(options?: {
   }, []);
 
   const openCheckout = useCallback(
-    async (input: { tier: "watch" | "advise"; cadence: "monthly" | "yearly"; email?: string | undefined; userId?: string | undefined }) => {
+    async (input: { tier: "watch" | "advise"; cadence: "monthly" | "yearly"; email?: string | undefined }) => {
       if (!env) return;
       const priceId =
         input.tier === "watch"
@@ -133,11 +133,13 @@ export function usePaddleCheckout(options?: {
         setError("This plan is not available for checkout yet.");
         return;
       }
+      const identity = await fetchCheckoutBinding();
       window.Paddle?.Checkout.open({
         items: [{ priceId, quantity: 1 }],
         ...(input.email ? { customer: { email: input.email } } : {}),
         customData: {
-          ...(input.userId ? { user_id: input.userId } : {}),
+          user_id: identity.userId,
+          user_binding: identity.binding,
           tier: input.tier,
           cadence: input.cadence,
         },
@@ -148,7 +150,7 @@ export function usePaddleCheckout(options?: {
         },
       });
     },
-    [env],
+    [env, fetchCheckoutBinding],
   );
 
   return { ready, unavailable: Boolean(error), error, openCheckout };
