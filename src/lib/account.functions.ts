@@ -267,17 +267,21 @@ export const createBusiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ProfileInput.parse(input))
   .handler(async ({ data, context }): Promise<{ business: Business }> => {
-    const tier = await planTierFor(context.supabase, context.userId);
-    const limit = PLAN_BUSINESS_LIMITS[tier];
-    const current = await countBusinesses(context.supabase, context.userId);
-    if (current >= limit) {
-      const where =
-        tier === "free"
-          ? "Subscribe to a plan to add your first business."
-          : tier === "watch"
-            ? "The Watch plan includes one business — upgrade to Advise for up to 5."
-            : "The Advise plan includes up to 5 businesses — the Expand tier adds unlimited.";
-      throw new Error(describeError("You've reached your plan's business limit.", where));
+    const { isAdminUser } = await import("@/lib/admin-users.server");
+    // Admins bypass the tier cap entirely (operator seats for testing/support).
+    if (!(await isAdminUser(context.userId))) {
+      const tier = await planTierFor(context.supabase, context.userId);
+      const limit = PLAN_BUSINESS_LIMITS[tier];
+      const current = await countBusinesses(context.supabase, context.userId);
+      if (current >= limit) {
+        const where =
+          tier === "free"
+            ? "Subscribe to a plan to add your first business."
+            : tier === "watch"
+              ? "The Watch plan includes one business — upgrade to Advise for up to 5."
+              : "The Advise plan includes up to 5 businesses — the Expand tier adds unlimited.";
+        throw new Error(describeError("You've reached your plan's business limit.", where));
+      }
     }
 
     const { data: created, error } = await context.supabase
@@ -847,9 +851,10 @@ export const listBriefs = createServerFn({ method: "POST" })
 
 export type BillingStatus = {
   paddleConnected: boolean;
-  planTier: "free" | "watch" | "advise";
+  planTier: "free" | "watch" | "advise" | "expand";
   /** Whether the subscription currently grants paid access — false for
-   *  canceled/paused even when the mapped tier is still populated. */
+   *  canceled/paused even when the mapped tier is still populated. Admin
+   *  accounts always report true (operator bypass). */
   accessGranted: boolean;
   subscriptionStatus: string | null;
   currentPeriodEnd: string | null;
@@ -875,8 +880,25 @@ export const getBillingStatus = createServerFn({ method: "POST" })
       billing_cadence?: string | null;
     };
     const { subscriptionGrantsAccess } = await import("@/lib/paddle.server");
+    const { isAdminUser, ADMIN_BILLING } = await import("@/lib/admin-users.server");
     const planTier =
       row.plan_tier === "watch" || row.plan_tier === "advise" ? row.plan_tier : "free";
+
+    // Admin accounts are operator seats: they bypass paywalls (tier caps,
+    // subscription gates, cron paid-tier filters) without being billed. Their
+    // profile row is never touched — the bypass is view-level.
+    if (await isAdminUser(context.userId)) {
+      return {
+        status: {
+          paddleConnected: Boolean(process.env["PADDLE_API_KEY"]),
+          planTier: ADMIN_BILLING.planTier,
+          accessGranted: ADMIN_BILLING.accessGranted,
+          subscriptionStatus: ADMIN_BILLING.subscriptionStatus,
+          currentPeriodEnd: ADMIN_BILLING.currentPeriodEnd,
+          cadence: ADMIN_BILLING.cadence,
+        },
+      };
+    }
 
     return {
       status: {

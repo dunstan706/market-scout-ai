@@ -21,6 +21,7 @@ const PLAN_LABEL: Record<BillingStatus["planTier"], string> = {
   free: "Free",
   watch: "Watch",
   advise: "Advise",
+  expand: "Admin (unlimited)",
 };
 
 function friendlySubscriptionStatus(status: string | null): string | null {
@@ -258,7 +259,7 @@ function ProfilePage() {
                 <span className="text-foreground">
                   {billing ? PLAN_LABEL[billing.planTier] : "…"}
                 </span>
-                {billing && !billing.accessGranted && billing.planTier !== "free" && (
+                {billing && !billing.accessGranted && billing.planTier !== "free" && billing.planTier !== "expand" && (
                   <span className="text-signal-red">(no access)</span>
                 )}
                 <button
