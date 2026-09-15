@@ -22,6 +22,13 @@
       "when": 1789443094694,
       "tag": "0002_secure_market_alerts_and_affiliate_rpcs",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789443133833,
+      "tag": "0003_restore_market_alert_kind",
+      "breakpoints": true
     }
   ]
 }

@@ -268,6 +268,7 @@ export type Database = {
       market_alerts: {
         Row: {
           acknowledged_at: string | null
+          alert_kind: string
           business_id: string
           competitor_name: string | null
           created_at: string
@@ -281,6 +282,7 @@ export type Database = {
         }
         Insert: {
           acknowledged_at?: string | null
+          alert_kind?: string
           business_id: string
           competitor_name?: string | null
           created_at?: string
@@ -294,6 +296,7 @@ export type Database = {
         }
         Update: {
           acknowledged_at?: string | null
+          alert_kind?: string
           business_id?: string
           competitor_name?: string | null
           created_at?: string
