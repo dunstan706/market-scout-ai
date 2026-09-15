@@ -231,6 +231,7 @@ function ProfilePage() {
         }
         items={[
           { name: "Business", children: businessMenuItems },
+          { name: "Workspace", href: "/app" },
           { name: "Plans", onClick: () => setPricingOpen(true) },
           { name: "Profile", href: "/profile" },
           { name: "Affiliates", href: "/affiliates" },

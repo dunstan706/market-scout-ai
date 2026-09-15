@@ -339,6 +339,17 @@ export function LegacyDashboard() {
   // hides its items).
   const navItems: AnimatedNavItem[] = [
     {
+      name: "Workspace",
+      children: [
+        { name: "Open workspace", href: "/app" },
+        { name: "Competitors", href: "/app/competitors" },
+        { name: "Compare", href: "/app/compare" },
+        { name: "Briefs", href: "/app/briefs" },
+        { name: "Market signals", href: "/app/market-signals" },
+        { name: "Sources & alerts", href: "/app/sources" },
+      ],
+    },
+    {
       name: "Business",
       children:
         businesses.length > 0

@@ -563,6 +563,17 @@ export function GlobeDashboard() {
           </Link>
         }
         items={[
+          {
+            name: "Workspace",
+            children: [
+              { name: "Open workspace", href: "/app" },
+              { name: "Competitors", href: "/app/competitors" },
+              { name: "Compare", href: "/app/compare" },
+              { name: "Briefs", href: "/app/briefs" },
+              { name: "Market signals", href: "/app/market-signals" },
+              { name: "Sources & alerts", href: "/app/sources" },
+            ],
+          },
           { name: "Business", children: businessMenuItems },
           { name: "Plans", onClick: openPricing },
           { name: "Profile", href: "/profile" },
