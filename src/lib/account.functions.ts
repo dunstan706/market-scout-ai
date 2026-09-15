@@ -906,6 +906,19 @@ export const openBillingPortal = createServerFn({ method: "POST" })
 
 // --- Pricing page (Paddle.js + localized prices) ---
 
+// Produces a server-authenticated binding for Paddle custom_data. The webhook
+// accepts a user id only when this signature matches, so browser-edited
+// checkout payloads cannot attach billing to another account.
+export const getPaddleCheckoutBinding = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ userId: string; binding: string }> => {
+    const { createCheckoutBinding } = await import("@/lib/paddle.server");
+    return {
+      userId: context.userId,
+      binding: createCheckoutBinding(context.userId),
+    };
+  });
+
 // Public Paddle.js config for the pricing page's checkout overlay. Safe to
 // expose: the client token is designed for browser use, and price IDs are
 // public catalog identifiers.

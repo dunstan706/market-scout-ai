@@ -76,6 +76,38 @@ export function isPaddleConfigured(): boolean {
   return Boolean(paddleApiKey());
 }
 
+const CHECKOUT_BINDING_VERSION = "v1";
+
+function checkoutBindingSecret(): string {
+  const secret = process.env["PADDLE_WEBHOOK_SECRET"]?.trim();
+  if (!secret) throw new Error("Paddle webhook signing is not configured.");
+  return secret;
+}
+
+/**
+ * Authenticates the account id embedded in Paddle custom_data. The value is
+ * minted only by an authenticated server function; knowing another account's
+ * UUID is therefore insufficient to attach a checkout to it.
+ */
+export function createCheckoutBinding(userId: string): string {
+  const signature = createHmac("sha256", checkoutBindingSecret())
+    .update(`${CHECKOUT_BINDING_VERSION}:${userId}`)
+    .digest("hex");
+  return `${CHECKOUT_BINDING_VERSION}.${signature}`;
+}
+
+export function verifyCheckoutBinding(userId: string, binding: unknown): boolean {
+  if (typeof binding !== "string") return false;
+  const [version, supplied, extra] = binding.split(".");
+  if (version !== CHECKOUT_BINDING_VERSION || !supplied || extra) return false;
+  const expected = createHmac("sha256", checkoutBindingSecret())
+    .update(`${CHECKOUT_BINDING_VERSION}:${userId}`)
+    .digest("hex");
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(supplied, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 type PaddleResponse<T> = {
   data?: T;
   error?: { type?: string; code?: string; detail?: string };

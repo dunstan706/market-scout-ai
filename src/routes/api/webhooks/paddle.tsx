@@ -97,7 +97,13 @@ async function resolveProfileRow(
   const customData = sub.custom_data ?? null;
   const customUserId =
     customData && typeof customData["user_id"] === "string" ? (customData["user_id"] as string) : null;
+  const customBinding = customData?.["user_binding"];
   if (customUserId) {
+    const { verifyCheckoutBinding } = await import("@/lib/paddle.server");
+    if (!verifyCheckoutBinding(customUserId, customBinding)) {
+      console.error("paddle webhook: rejected unsigned checkout account binding");
+      return null;
+    }
     const { data } = await supabaseAdmin
       .from("profiles")
       .select("id, paddle_customer_id, paddle_subscription_id, plan_tier")

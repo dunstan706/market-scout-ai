@@ -108,7 +108,6 @@ function PricingPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isMonthly, setIsMonthly] = useState(true);
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
-  const [userId, setUserId] = useState<string | undefined>(undefined);
 
   // Paddle.js + one-page overlay checkout.
   const { ready: paddleReady, unavailable, error: paddleError, openCheckout } = usePaddleCheckout();
@@ -121,7 +120,6 @@ function PricingPage() {
       .then(({ data }) => {
         if (!active) return;
         setUserEmail(data.user?.email ?? undefined);
-        setUserId(data.user?.id ?? undefined);
       })
       .catch(() => {});
     return () => {
@@ -138,12 +136,12 @@ function PricingPage() {
     if (resumedRef.current) return;
     if (!resumeTier || !resumeCadence || !userEmail || !paddleReady) return;
     resumedRef.current = true;
-    openCheckout({ tier: resumeTier, cadence: resumeCadence, email: userEmail, userId }).finally(
+    openCheckout({ tier: resumeTier, cadence: resumeCadence, email: userEmail }).finally(
       () => {
         router.navigate({ to: "/pricing", search: {} });
       },
     );
-  }, [resumeTier, resumeCadence, userEmail, userId, paddleReady, openCheckout, router]);
+  }, [resumeTier, resumeCadence, userEmail, paddleReady, openCheckout, router]);
 
   // Localized, tax-inclusive prices for the visitor's country (IP-resolved).
   useEffect(() => {
@@ -192,10 +190,9 @@ function PricingPage() {
         tier: plan.tier,
         cadence: monthly ? "monthly" : "yearly",
         email: userEmail,
-        userId,
       });
     },
-    [userEmail, router, paddleReady, openCheckout, userId],
+    [userEmail, router, paddleReady, openCheckout],
   );
 
   return (
