@@ -342,6 +342,20 @@ function PricingCard({
   const isIncludedTier =
     viewerRank !== undefined && planRank !== undefined && planRank < viewerRank;
   const isDisabledPlan = isCurrentTier || isIncludedTier;
+  // "Upgrade" is only meaningful when moving up from a paid plan — a free
+  // viewer is simply subscribing, so they see the plan's own button text.
+  const isUpgradeStep =
+    viewerRank !== undefined &&
+    planRank !== undefined &&
+    viewerRank > 0 &&
+    planRank === viewerRank + 1;
+  const buttonLabel = isCurrentTier
+    ? "Current plan"
+    : isIncludedTier
+      ? "Included in your plan"
+      : isUpgradeStep
+        ? "Upgrade"
+        : plan.buttonText;
 
   const numericPrice = Number(plan.price);
   const hasFixedPrice = plan.price.trim() !== "" && !Number.isNaN(numericPrice);
@@ -470,7 +484,7 @@ function PricingCard({
                 isDisabledPlan && "cursor-default opacity-60",
               )}
             >
-              {isCurrentTier ? "Current plan" : isIncludedTier ? "Included in your plan" : plan.buttonText}
+              {buttonLabel}
             </button>
           ) : (
             <a
