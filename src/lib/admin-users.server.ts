@@ -20,6 +20,8 @@ export function adminEmailsConfigured(): boolean {
   return adminEmailList().length > 0;
 }
 
+/** Is this account a designated admin (email in ADMIN_EMAILS)? Independent of
+ *  the manual privileges switch — call `adminPrivilegesActive` for that. */
 export async function isAdminUser(userId: string): Promise<boolean> {
   if (!userId) return false;
   const emails = adminEmailList();
@@ -29,10 +31,29 @@ export async function isAdminUser(userId: string): Promise<boolean> {
   return emails.includes(email);
 }
 
+/** True only when a designated admin has ALSO switched their manual
+ *  "admin privileges" on (profiles.admin_privileges_enabled). Non-admins are
+ *  never active regardless of the column — it is only ever read here, behind
+ *  the ADMIN_EMAILS check, so flipping it on a normal account does nothing. */
+export async function adminPrivilegesActive(userId: string): Promise<boolean> {
+  if (!(await isAdminUser(userId))) return false;
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("admin_privileges_enabled")
+    .eq("id", userId)
+    .maybeSingle();
+  return Boolean(
+    (data as { admin_privileges_enabled?: boolean | null } | null)
+      ?.admin_privileges_enabled,
+  );
+}
+
 // All admin account ids, resolved once per call site (crons use this to
 // include admin profiles in paid-tier runs without N per-profile lookups).
 export async function getAdminUserIds(): Promise<Set<string>> {
-  const { getAuthUserIdByEmail } = await import("@/integrations/supabase/auth-lookup.server");
+  const { getAuthUserIdByEmail } = await import(
+    "@/integrations/supabase/auth-lookup.server"
+  );
   const ids = new Set<string>();
   for (const email of adminEmailList()) {
     const id = await getAuthUserIdByEmail(email);
@@ -41,10 +62,30 @@ export async function getAdminUserIds(): Promise<Set<string>> {
   return ids;
 }
 
-// The billing view of an admin: treated as the internal "expand" tier with
-// access always granted. Used by getBillingStatus so every downstream gate
-// (business caps, plan overlays, cron paid-tier filters) opens for admins
-// without their profile row ever being touched.
+/** All admin account ids whose manual privileges switch is ON. Used by the
+ *  crons, which iterate profiles and can consult the row's own flag instead of
+ *  paying a GoTrue round-trip per profile. */
+export async function getPrivilegedAdminUserIds(): Promise<Set<string>> {
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("id, admin_privileges_enabled")
+    .eq("admin_privileges_enabled", true);
+  const designated = await getAdminUserIds();
+  const active = new Set<string>();
+  for (const row of (data ?? []) as Array<{
+    id: string;
+    admin_privileges_enabled: boolean | null;
+  }>) {
+    if (row.admin_privileges_enabled && designated.has(row.id)) active.add(row.id);
+  }
+  return active;
+}
+
+// The billing view of an admin whose privileges are switched ON: treated as
+// the internal "expand" tier with access always granted. Used by
+// getBillingStatus so every downstream gate (business caps, plan overlays,
+// cron paid-tier filters) opens for them without their plan_tier ever being
+// touched. Privileges OFF → the admin's real row decides (free-like).
 export const ADMIN_BILLING = {
   planTier: "expand" as const,
   accessGranted: true,

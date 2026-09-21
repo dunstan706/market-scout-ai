@@ -38,6 +38,10 @@ export type TierGate = {
   atCap: boolean;
 };
 
+// Fired by the corner admin-privileges toggle so every mounted
+// useBusinessManager re-syncs its billing view without a reload.
+export const ADMIN_PRIVILEGES_EVENT = "thebizscope:admin-privileges-changed";
+
 export function useBusinessManager({ auto = true }: { auto?: boolean } = {}) {
   const fetchBusinesses = useServerFn(listBusinesses);
   const addBusinessFn = useServerFn(createBusiness);
@@ -179,6 +183,29 @@ export function useBusinessManager({ auto = true }: { auto?: boolean } = {}) {
     canAddMore: businesses.length < PLAN_BUSINESS_LIMITS[tier],
     atCap: businesses.length >= PLAN_BUSINESS_LIMITS[tier],
   };
+
+  // Admin-privileges flips (the corner toggle) re-sync billing in every open
+  // dashboard instantly — no reload needed. The custom event carries no
+  // payload; we simply re-fetch the billing view.
+  useEffect(() => {
+    if (!auto) return;
+    const onPrivilegesChanged = () => {
+      fetchBilling()
+        .then(({ status }) => setBilling(status))
+        .catch(() => {
+          // Never block the dashboard for a billing re-sync failure.
+        });
+    };
+    window.addEventListener(
+      ADMIN_PRIVILEGES_EVENT,
+      onPrivilegesChanged,
+    );
+    return () =>
+      window.removeEventListener(
+        ADMIN_PRIVILEGES_EVENT,
+        onPrivilegesChanged,
+      );
+  }, [auto, fetchBilling]);
 
   return {
     // Data

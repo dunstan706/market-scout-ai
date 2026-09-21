@@ -267,9 +267,10 @@ export const createBusiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => ProfileInput.parse(input))
   .handler(async ({ data, context }): Promise<{ business: Business }> => {
-    const { isAdminUser } = await import("@/lib/admin-users.server");
-    // Admins bypass the tier cap entirely (operator seats for testing/support).
-    if (!(await isAdminUser(context.userId))) {
+    const { adminPrivilegesActive } = await import("@/lib/admin-users.server");
+    // Admins whose manual privileges switch is ON bypass the tier cap
+    // entirely (operator seats for testing/support); switch OFF reads free.
+    if (!(await adminPrivilegesActive(context.userId))) {
       const tier = await planTierFor(context.supabase, context.userId);
       const limit = PLAN_BUSINESS_LIMITS[tier];
       const current = await countBusinesses(context.supabase, context.userId);
@@ -854,7 +855,8 @@ export type BillingStatus = {
   planTier: "free" | "watch" | "advise" | "expand";
   /** Whether the subscription currently grants paid access — false for
    *  canceled/paused even when the mapped tier is still populated. Admin
-   *  accounts always report true (operator bypass). */
+   *  accounts with their privileges switch ON always report true (operator
+   *  bypass); switch OFF reads the real tier like any other account. */
   accessGranted: boolean;
   subscriptionStatus: string | null;
   currentPeriodEnd: string | null;
@@ -880,14 +882,16 @@ export const getBillingStatus = createServerFn({ method: "POST" })
       billing_cadence?: string | null;
     };
     const { subscriptionGrantsAccess } = await import("@/lib/paddle.server");
-    const { isAdminUser, ADMIN_BILLING } = await import("@/lib/admin-users.server");
+    const { adminPrivilegesActive, ADMIN_BILLING } = await import("@/lib/admin-users.server");
     const planTier =
       row.plan_tier === "watch" || row.plan_tier === "advise" ? row.plan_tier : "free";
 
-    // Admin accounts are operator seats: they bypass paywalls (tier caps,
-    // subscription gates, cron paid-tier filters) without being billed. Their
-    // profile row is never touched — the bypass is view-level.
-    if (await isAdminUser(context.userId)) {
+    // Designated admins whose manual privileges switch is ON are operator
+    // seats: they bypass paywalls (tier caps, subscription gates, cron
+    // paid-tier filters) without being billed. Their plan_tier is never
+    // touched — the bypass is view-level. Switch OFF → falls through and the
+    // account reads exactly like its real tier (free for a non-billed admin).
+    if (await adminPrivilegesActive(context.userId)) {
       return {
         status: {
           paddleConnected: Boolean(process.env["PADDLE_API_KEY"]),
@@ -911,6 +915,45 @@ export const getBillingStatus = createServerFn({ method: "POST" })
           row.billing_cadence === "yearly" ? "yearly" : row.billing_cadence === "monthly" ? "monthly" : null,
       },
     };
+  });
+
+// Flips the manual "admin privileges" switch. Designated admins only (the
+// flag is inert for everyone else — the server never reads it outside the
+// ADMIN_EMAILS check). ON = sail past every paywall as the expand tier;
+// OFF = the account reads exactly like its real tier (free for a non-billed
+// admin). The enabled state is read back so the toggle can't drift from the
+// database, and `isAdmin` lets the UI hide the switch for everyone else.
+export const setAdminPrivileges = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ enabled: z.boolean() }).parse(input))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<
+      | { ok: true; enabled: boolean; isAdmin: boolean }
+      | { ok: false; error: string; isAdmin: boolean }
+    > => {
+      const { isAdminUser } = await import("@/lib/admin-users.server");
+      if (!(await isAdminUser(context.userId))) {
+        return { ok: false, error: "Admin access required.", isAdmin: false };
+      }
+      const { error } = await context.supabase
+        .from("profiles")
+        .update({ admin_privileges_enabled: data.enabled })
+        .eq("id", context.userId);
+      if (error) return { ok: false, error: error.message, isAdmin: true };
+      return { ok: true, enabled: data.enabled, isAdmin: true };
+    },
+  );
+
+// Which viewer sees the admin privileges switch at all. Cheap enough to fetch
+// alongside billing; hides the switch for every non-admin account.
+export const getIsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ isAdmin: boolean }> => {
+    const { isAdminUser } = await import("@/lib/admin-users.server");
+    return { isAdmin: await isAdminUser(context.userId) };
   });
 
 // Generates a short-lived link to Paddle's hosted customer portal where the

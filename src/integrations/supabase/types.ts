@@ -594,6 +594,7 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           google_place_id: string | null
+          admin_privileges_enabled: boolean
           id: string
           location: string | null
           paddle_customer_id: string | null
@@ -612,6 +613,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           google_place_id?: string | null
+          admin_privileges_enabled?: boolean
           id: string
           location?: string | null
           paddle_customer_id?: string | null
@@ -630,6 +632,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           google_place_id?: string | null
+          admin_privileges_enabled?: boolean
           id?: string
           location?: string | null
           paddle_customer_id?: string | null

@@ -99,12 +99,13 @@ async function runDailyAlerts(request: Request): Promise<Response> {
     // the first qualifying alert of the day spends it.
     const emailedToday = new Set<string>();
 
-    const { getAdminUserIds } = await import("@/lib/admin-users.server");
-    const adminIds = await getAdminUserIds();
+    const { getPrivilegedAdminUserIds } = await import("@/lib/admin-users.server");
+    const adminIds = await getPrivilegedAdminUserIds();
     for (const profile of profiles ?? []) {
       const tier = (profile as { plan_tier?: string | null }).plan_tier ?? "free";
       const isAdmin = adminIds.has(profile.id);
-      // Admins are operator seats: always treated as paid.
+      // Admins with the privileges switch ON are operator seats: always
+      // treated as paid.
       if (!force && !isAdmin && tier !== "advise" && tier !== "expand") {
         skippedUnpaid += 1;
         continue;

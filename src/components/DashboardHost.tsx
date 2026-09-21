@@ -4,6 +4,7 @@ import { useState } from "react";
 import { GlobeDashboard } from "@/components/GlobeDashboard";
 import { LegacyDashboard } from "@/components/LegacyDashboard";
 import { LegacyDashboardToggle } from "@/components/LegacyDashboardToggle";
+import { AdminPrivilegesToggle } from "@/components/AdminPrivilegesToggle";
 
 // Remembered in the tab session so a reload keeps whichever dashboard the
 // user picked.
@@ -46,11 +47,11 @@ export function DashboardHost() {
           light :root palette. The wrapper is layout-free (its child is
           fixed). */}
       <div className="theme-dark">
-        <LegacyDashboardToggle
-          legacy={legacy}
-          onToggle={onToggle}
-          className="fixed right-4 top-24 z-[70] md:right-6 md:top-6"
-        />
+        <div className="fixed right-4 top-24 z-[70] flex flex-col items-end gap-2 md:right-6 md:top-6">
+          <LegacyDashboardToggle legacy={legacy} onToggle={onToggle} />
+          {/* Designated admins only — everyone else renders nothing. */}
+          <AdminPrivilegesToggle />
+        </div>
       </div>
     </>
   );

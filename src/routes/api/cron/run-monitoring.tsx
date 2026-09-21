@@ -85,13 +85,13 @@ async function runWeeklyMonitoring(request: Request): Promise<Response> {
     // per business, so an Advise account with three businesses gets three
     // briefs. Falls back to the profile's own business fields when the
     // businesses table is not yet migrated (pre-deploy DBs keep working).
-    const { getAdminUserIds } = await import("@/lib/admin-users.server");
-    const adminIds = await getAdminUserIds();
+    const { getPrivilegedAdminUserIds } = await import("@/lib/admin-users.server");
+    const adminIds = await getPrivilegedAdminUserIds();
     for (const profile of profiles ?? []) {
       const tier = (profile as { plan_tier?: string | null }).plan_tier ?? "free";
       const isAdmin = adminIds.has(profile.id);
-      // Admins are operator seats: always treated as paid regardless of their
-      // profile's plan_tier.
+      // Admins with the privileges switch ON are operator seats: always
+      // treated as paid regardless of their profile's plan_tier.
       if (
         !force &&
         !isAdmin &&
