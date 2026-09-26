@@ -281,6 +281,28 @@ export async function createPaddlePortalSession(options: {
   return { ok: true, url };
 }
 
+/**
+ * True when the given Paddle customer ID exists in the CURRENT Paddle
+ * environment (per PADDLE_ENV). Used to drop stale IDs carried over from the
+ * other environment — e.g. a sandbox-era ctm_ on a profile after the sandbox
+ * → live migration. Handing Paddle.js a customer that doesn't exist in its
+ * environment breaks Checkout.open with a generic "Something went wrong"
+ * before any transaction is created, so we probe before we trust.
+ */
+export async function paddleCustomerExists(paddleCustomerId: string): Promise<boolean> {
+  const { data, error } = await paddleRequest<{ id?: string }>(
+    "GET",
+    `/customers/${encodeURIComponent(paddleCustomerId)}`,
+  );
+  if (error) {
+    // Not-found is the interesting case — anything else (auth, network) must
+    // NOT silently drop a possibly-valid customer.
+    if (/not[_ ]?found|does not exist|invalid/i.test(error)) return false;
+    return true;
+  }
+  return Boolean(data);
+}
+
 // --- Webhook signature verification ---
 // Matches Paddle's official SDK: the `Paddle-Signature` header carries
 // `ts=<unix>;h1=<hex>`, where h1 is HMAC-SHA256 of `${ts}:${rawBody}` keyed

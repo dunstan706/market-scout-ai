@@ -1010,7 +1010,7 @@ export const getPaddleEnv = createServerFn({ method: "POST" })
         adviseYearly: string | null;
       };
     }> => {
-      const { paddleClientToken, paddleApiBase, catalogPriceId } = await import("@/lib/paddle.server");
+      const { paddleClientToken, paddleApiBase, catalogPriceId, paddleCustomerExists } = await import("@/lib/paddle.server");
 
       // Paddle Retain (churn-reduction) needs the signed-in customer's Paddle
       // customer ID at Paddle.Initialize (pwCustomer). The pricing page also
@@ -1042,9 +1042,16 @@ export const getPaddleEnv = createServerFn({ method: "POST" })
                   .select("paddle_customer_id")
                   .eq("id", userId)
                   .maybeSingle();
-                paddleCustomerId =
+                const storedCustomerId =
                   (profile as { paddle_customer_id?: string | null } | null)?.paddle_customer_id ??
                   null;
+                // A ctm_ stored under the OTHER Paddle environment (e.g. a
+                // sandbox-era ID after the sandbox → live migration) breaks
+                // Paddle.js Checkout.open with a generic "Something went
+                // wrong". Only hand over IDs that exist in the current env.
+                if (storedCustomerId && (await paddleCustomerExists(storedCustomerId))) {
+                  paddleCustomerId = storedCustomerId;
+                }
               }
             }
           }
