@@ -19,6 +19,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RefundRouteImport } from './routes/refund'
+import { Route as SalonMarketingIdeasRouteImport } from './routes/salon-marketing-ideas'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -87,6 +88,11 @@ const ProfileRoute = ProfileRouteImport.update({
 const RefundRoute = RefundRouteImport.update({
   id: '/refund',
   path: '/refund',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalonMarketingIdeasRoute = SalonMarketingIdeasRouteImport.update({
+  id: '/salon-marketing-ideas',
+  path: '/salon-marketing-ideas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/refund': typeof RefundRoute
+  '/salon-marketing-ideas': typeof SalonMarketingIdeasRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
@@ -226,6 +233,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/refund': typeof RefundRoute
+  '/salon-marketing-ideas': typeof SalonMarketingIdeasRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/refund': typeof RefundRoute
+  '/salon-marketing-ideas': typeof SalonMarketingIdeasRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
@@ -291,6 +300,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/profile'
     | '/refund'
+    | '/salon-marketing-ideas'
     | '/signup'
     | '/sitemap.xml'
     | '/terms'
@@ -321,6 +331,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/profile'
     | '/refund'
+    | '/salon-marketing-ideas'
     | '/signup'
     | '/sitemap.xml'
     | '/terms'
@@ -352,6 +363,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/profile'
     | '/refund'
+    | '/salon-marketing-ideas'
     | '/signup'
     | '/sitemap.xml'
     | '/terms'
@@ -384,6 +396,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ProfileRoute: typeof ProfileRoute
   RefundRoute: typeof RefundRoute
+  SalonMarketingIdeasRoute: typeof SalonMarketingIdeasRoute
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
@@ -465,6 +478,13 @@ declare module '@tanstack/react-router' {
       path: '/refund'
       fullPath: '/refund'
       preLoaderRoute: typeof RefundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/salon-marketing-ideas': {
+      id: '/salon-marketing-ideas'
+      path: '/salon-marketing-ideas'
+      fullPath: '/salon-marketing-ideas'
+      preLoaderRoute: typeof SalonMarketingIdeasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -644,6 +664,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ProfileRoute: ProfileRoute,
   RefundRoute: RefundRoute,
+  SalonMarketingIdeasRoute: SalonMarketingIdeasRoute,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
