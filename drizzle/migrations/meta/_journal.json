@@ -36,6 +36,13 @@
       "when": 1789455783293,
       "tag": "0004_protect_profile_billing_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790853245312,
+      "tag": "0005_add_admin_privileges_enabled",
+      "breakpoints": true
     }
   ]
 }
