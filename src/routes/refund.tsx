@@ -12,7 +12,13 @@ export const Route = createFileRoute("/refund")({
         name: "description",
         content: "How refunds work for theBizScope subscriptions — case-by-case within 30 days of a payment.",
       },
+      { property: "og:title", content: "Refund policy — theBizScope" },
+      { property: "og:description", content: "How refunds work for theBizScope subscriptions, including requests made within 30 days of payment." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://thebizscope.com/refund" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://thebizscope.com/refund" }],
   }),
   component: RefundPage,
 });

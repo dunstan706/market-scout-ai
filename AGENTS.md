@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Public editorial routes must opt into the router-derived sitemap with `staticData.sitemap: true`; non-public routes opt out. This keeps discovery aligned with route intent.
