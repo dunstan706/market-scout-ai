@@ -29,7 +29,9 @@ export const Route = createFileRoute("/")({
       // relative og:image values, so the link preview would ship imageless.
       { property: "og:image", content: "https://thebizscope.com/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:url", content: "https://thebizscope.com/" },
     ],
+    links: [{ rel: "canonical", href: "https://thebizscope.com/" }],
   }),
   component: Index,
 });
@@ -319,6 +321,9 @@ function Index() {
       <footer className="mx-auto flex max-w-6xl flex-col gap-3 border-t border-rule px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>© 2026 theBizScope. AI market research for local businesses.</p>
         <div className="flex items-center gap-5">
+          <Link to="/salon-marketing-ideas" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+            Salon marketing guide
+          </Link>
           <Link to="/privacy" className="underline decoration-rule underline-offset-2 hover:text-foreground">
             Privacy
           </Link>

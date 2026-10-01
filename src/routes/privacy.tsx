@@ -11,7 +11,13 @@ export const Route = createFileRoute("/privacy")({
         name: "description",
         content: "How theBizScope collects, uses, and protects your data.",
       },
+      { property: "og:title", content: "Privacy — theBizScope" },
+      { property: "og:description", content: "How theBizScope collects, uses, and protects your data." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://thebizscope.com/privacy" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://thebizscope.com/privacy" }],
   }),
   component: PrivacyPage,
 });

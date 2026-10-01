@@ -17,7 +17,13 @@ export const Route = createFileRoute("/pricing")({
         name: "description",
         content: "Watch or Advise: weekly market briefs for salons and spas. Country-localized, tax-inclusive pricing.",
       },
+      { property: "og:title", content: "Pricing — theBizScope" },
+      { property: "og:description", content: "Compare weekly market intelligence plans for salons and spas." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://thebizscope.com/pricing" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://thebizscope.com/pricing" }],
   }),
   // ?tier=&cadence= is the resume-checkout intent handed back by signup/login.
   validateSearch: (
@@ -257,6 +263,9 @@ function PricingPage() {
             collected for your country. Cancel any time from the customer portal.
           </p>
           <div className="mt-3 flex items-center gap-5">
+            <Link to="/salon-marketing-ideas" className="underline decoration-rule underline-offset-2 hover:text-foreground">
+              Salon marketing guide
+            </Link>
             <Link to="/privacy" className="underline decoration-rule underline-offset-2 hover:text-foreground">
               Privacy
             </Link>

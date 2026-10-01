@@ -12,7 +12,13 @@ export const Route = createFileRoute("/terms")({
         name: "description",
         content: "The terms that apply when you use theBizScope.",
       },
+      { property: "og:title", content: "Terms — theBizScope" },
+      { property: "og:description", content: "The terms that apply when you use theBizScope." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://thebizscope.com/terms" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://thebizscope.com/terms" }],
   }),
   component: TermsPage,
 });
