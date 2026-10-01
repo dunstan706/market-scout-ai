@@ -584,6 +584,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          admin_privileges_enabled: boolean
           billing_cadence: string | null
           business_name: string | null
           business_type: string
@@ -602,6 +603,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          admin_privileges_enabled?: boolean
           billing_cadence?: string | null
           business_name?: string | null
           business_type?: string
@@ -620,6 +622,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          admin_privileges_enabled?: boolean
           billing_cadence?: string | null
           business_name?: string | null
           business_type?: string
